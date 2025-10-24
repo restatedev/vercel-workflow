@@ -1,17 +1,13 @@
-# My New Monorepo
+# Vercel Restate World
 
-A TypeScript monorepo with comprehensive tooling for building, testing, and publishing libraries.
+A TypeScript monorepo demonstrating Restate integration with Vercel Workflow. See [DEVELOPMENT.md](./DEVELOPMENT.md) for comprehensive monorepo documentation.
 
-## Features
+## Packages
 
-- 📦 PNPM Workspaces with catalogs
-- 🏗️ TypeScript Project References
-- ⚡ Fast builds with tsdown
-- 🧪 Vitest for testing
-- 🎨 ESLint & Prettier
-- 📝 Changesets for versioning
-- 🤖 GitHub Actions CI/CD
-- 🚀 Turbo for smart caching
+- **`@restatedev/world`**: Package using typed client to implement World by talking to Restate virtual objects/services
+- **`@restatedev/backend`**: Collection of Restate virtual objects and services  
+- **`@restatedev/common`**: Common types package (private, not publishable)
+- **`@restatedev/workflow`**: Example package built using `workflow` package
 
 ## Quick Start
 
@@ -19,73 +15,20 @@ A TypeScript monorepo with comprehensive tooling for building, testing, and publ
 # Install dependencies
 pnpm install
 
-# Create your first package
-pnpm new
-
-# Start dev mode (type checking only, no builds!)
+# Start dev mode (type checking)
 pnpm dev
 
-# Run tests in watch mode
-pnpm test:watch
+# Run workflow example
+pnpm examples:dev
 
-# Build lib packages (when ready to test production builds)
-pnpm build
+# Inspect workflows
+pnpm inspect
 
 # Run all checks (before committing)
 pnpm verify
 ```
 
-## Package Management
-
-### Create a Package
-
-```bash
-pnpm new
-```
-
-This will prompt you for:
-- **Package type**: `lib` (library), `test` (test package), or `example` (example app)
-- **Package name**: e.g., `my-package`
-- **Private**: Whether the package should be private (for libs only)
-
-The generator will:
-- Create the package structure
-- Generate TypeScript configs
-- Update workspace path mappings
-- Install dependencies automatically
-
-### Delete a Package
-
-```bash
-pnpm delete
-```
-
-Select a package to remove. Dependencies and TypeScript path mappings will be automatically cleaned up.
-
-### Add Custom Entry Points
-
-```bash
-pnpm add-entry
-```
-
-Add subpath exports to a public lib (e.g., `@restatedev/my-lib/utils`). This automatically:
-- Creates the source file
-- Updates package.json exports and typesVersions
-- Configures tsdown, API Extractor, and TypeScript paths
-- Ensures all validation tools work with the new entry
-
 ## Documentation
 
-- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Complete development guide covering:
-  - Package types and structure
-  - Managing dependencies
-  - Development workflow
-  - Testing and building
-  - Publishing and releases
-  - GitHub Actions setup
-
-- **[AGENTS.md](./AGENTS.md)** - Guide for AI coding assistants working with this monorepo:
-  - Project overview and key concepts
-  - Common tasks and patterns
-  - Configuration details
-  - Best practices and troubleshooting
+- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Complete monorepo guide (PNPM, Turbo, tsdown, Vitest, Changesets)
+- **[AGENTS.md](./AGENTS.md)** - Guide for AI coding assistants with commands, code style, and best practices
