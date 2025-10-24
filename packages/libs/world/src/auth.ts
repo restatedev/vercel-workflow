@@ -3,10 +3,10 @@ import type { AuthProvider } from "@workflow/world";
 export const auth: AuthProvider = {
   async getAuthInfo() {
     return {
-      ownerId: "embedded-owner",
-      projectId: "embedded-project",
-      environment: "embedded",
-      userId: "embedded-user",
+      ownerId: "restate-owner",
+      projectId: "restate-project",
+      environment: "restate",
+      userId: "restate-user",
     };
   },
 
@@ -14,7 +14,7 @@ export const auth: AuthProvider = {
     return {
       success: true,
       data: { healthy: true },
-      message: "Embedded backend is healthy",
+      message: "backend is healthy",
     };
   },
 };
