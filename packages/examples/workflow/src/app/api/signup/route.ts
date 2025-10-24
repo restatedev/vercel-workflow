@@ -5,10 +5,11 @@ import { NextResponse } from "next/server.js";
 export async function POST(request: Request) {
   const { email } = (await request.json()) as { email: string };
 
-  // Executes asynchronously and doesn't block your app
-  await start(handleUserSignup, [email]);
+  const run = await start(handleUserSignup, [email]);
 
   return NextResponse.json({
     message: "User signup workflow started",
+    runId: run.runId,
   });
 }
+
