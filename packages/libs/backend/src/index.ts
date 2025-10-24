@@ -9,10 +9,16 @@
  * TODO: Add repository URL
  */
 
-import { object, ObjectContext, TerminalError } from "@restatedev/restate-sdk";
+import {
+  Context,
+  object,
+  ObjectContext,
+  RestatePromise,
+  service,
+  TerminalError,
+} from "@restatedev/restate-sdk";
 
 import {
-  WorkflowRunSchema,
   type CancelWorkflowRunParams,
   type CreateWorkflowRunRequest,
   type GetWorkflowRunParams,
@@ -30,30 +36,29 @@ import {
   type CreateHookRequest,
   type GetHookParams,
   type Event,
+  type CreateEventRequest,
+  type ListEventsParams,
+  ListWorkflowRunStepsParams,
+  ListEventsByCorrelationIdParams,
 } from "@workflow/world";
 import {
   DEFAULT_RESOLVE_DATA_OPTION,
   filterRunData,
   filterStepData,
   filterHookData,
+  filterEventData,
 } from "./utils.js";
+import { clear } from "console";
 
 // key by runId
 
-type StepKey = `step_${string}`;
-type HookKey = `hook_${string}`;
+export type State = { run: WorkflowRun } & {
+  [key in `step_${string}`]: Step;
+} & {
+  [key in `event_${string}`]: Event;
+};
 
-export type WorkflowContext = ObjectContext<
-  {
-    [key in StepKey]: Step;
-  } & { [key in HookKey]: Hook } & { run: WorkflowRun }
->;
-
-// key by stepId
-export type StepContext = ObjectContext<{ step: Step }>;
-
-// key by hookId
-export type HookContext = ObjectContext<{ hook: Hook }>;
+export type WorkflowContext = ObjectContext<State>;
 
 export const workflowApi = object({
   name: "workflow",
@@ -172,24 +177,73 @@ export const workflowApi = object({
     },
 
     async cancelRun(ctx: WorkflowContext, params?: CancelWorkflowRunParams) {
-      const run = await this.updateRun(ctx, { status: "cancelled" });
+      // Inline updateRun logic for status change
+      const run = await ctx.get("run");
+      if (!run) {
+        throw new TerminalError("Workflow run not found", { errorCode: 404 });
+      }
+
+      const now = new Date();
+      const updatedRun: WorkflowRun = {
+        ...run,
+        status: "cancelled",
+        updatedAt: now,
+        completedAt: now,
+      };
+
+      ctx.set("run", updatedRun);
+
       const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-      return filterRunData(run, resolveData);
+      return filterRunData(updatedRun, resolveData);
     },
 
     async pauseRun(ctx: WorkflowContext, params?: PauseWorkflowRunParams) {
-      const run = await this.updateRun(ctx, { status: "paused" });
+      // Inline updateRun logic for status change
+      const run = await ctx.get("run");
+      if (!run) {
+        throw new TerminalError("Workflow run not found", { errorCode: 404 });
+      }
+
+      const now = new Date();
+      const updatedRun: WorkflowRun = {
+        ...run,
+        status: "paused",
+        updatedAt: now,
+      };
+
+      ctx.set("run", updatedRun);
+
       const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-      return filterRunData(run, resolveData);
+      return filterRunData(updatedRun, resolveData);
     },
 
     async resumeRun(ctx: WorkflowContext, params?: ResumeWorkflowRunParams) {
-      const run = await this.updateRun(ctx, { status: "running" });
+      // Inline updateRun logic for status change
+      const run = await ctx.get("run");
+      if (!run) {
+        throw new TerminalError("Workflow run not found", { errorCode: 404 });
+      }
+
+      const now = new Date();
+      const updatedRun: WorkflowRun = {
+        ...run,
+        status: "running",
+        updatedAt: now,
+      };
+
+      // Only set startedAt the first time the run transitions to 'running'
+      if (!updatedRun.startedAt) {
+        updatedRun.startedAt = now;
+      }
+
+      ctx.set("run", updatedRun);
+
       const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-      return filterRunData(run, resolveData);
+      return filterRunData(updatedRun, resolveData);
     },
 
     // steps ------------------------------------------------------------------
+
     async createStep(ctx: WorkflowContext, data: CreateStepRequest) {
       const stepKey = `step_${data.stepId}` as const;
       const existing = await ctx.get(stepKey);
@@ -222,50 +276,12 @@ export const workflowApi = object({
       return result;
     },
 
-    // hooks ------------------------------------------------------------------
-  },
-  options: {
-    enableLazyState: true,
-  },
-});
-
-export const stepsApi = object({
-  name: "steps",
-  handlers: {
-    async create(ctx: StepContext, data: CreateStepRequest) {
-      const existing = await ctx.get("step");
-      if (existing) {
-        throw new TerminalError("Step already exists", {
-          errorCode: 409,
-        });
-      }
-
-      const stepId = ctx.key;
-      const now = new Date();
-
-      const result: Step = {
-        runId: "virtual-run", // Virtual objects don't need filesystem-style runId tracking
-        stepId,
-        stepName: data.stepName,
-        status: "pending",
-        input: data.input as any[],
-        output: undefined,
-        error: undefined,
-        errorCode: undefined,
-        attempt: 0,
-        startedAt: undefined,
-        completedAt: undefined,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      ctx.set("step", result);
-
-      return result;
-    },
-
-    async get(ctx: StepContext, params?: GetStepParams) {
-      const step = await ctx.get("step");
+    async getStep(
+      ctx: WorkflowContext,
+      params: { stepId: string } & GetStepParams
+    ) {
+      const stepKey = `step_${params.stepId}` as const;
+      const step = await ctx.get(stepKey);
       if (!step) {
         throw new TerminalError("Step not found", { errorCode: 404 });
       }
@@ -273,8 +289,12 @@ export const stepsApi = object({
       return filterStepData(step, resolveData);
     },
 
-    async update(ctx: StepContext, data: UpdateStepRequest) {
-      const step = await ctx.get("step");
+    async updateStep(
+      ctx: WorkflowContext,
+      params: { stepId: string } & UpdateStepRequest
+    ) {
+      const stepKey = `step_${params.stepId}` as const;
+      const step = await ctx.get(stepKey);
       if (!step) {
         throw new TerminalError("Step not found", { errorCode: 404 });
       }
@@ -282,34 +302,112 @@ export const stepsApi = object({
       const now = new Date();
       const updatedStep: Step = {
         ...step,
-        ...data,
+        ...params,
         updatedAt: now,
       };
 
       // Only set startedAt the first time the step transitions to 'running'
-      if (data.status === "running" && !updatedStep.startedAt) {
+      if (params.status === "running" && !updatedStep.startedAt) {
         updatedStep.startedAt = now;
       }
-      if (data.status === "completed" || data.status === "failed") {
+      if (params.status === "completed" || params.status === "failed") {
         updatedStep.completedAt = now;
       }
 
-      ctx.set("step", updatedStep);
+      ctx.set(stepKey, updatedStep);
 
       return updatedStep;
     },
 
-    // Lists are not implemented yet as per instructions
+    async listSteps(ctx: WorkflowContext, params: ListWorkflowRunStepsParams) {
+      const resolveData = params.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
+      const allKeys = (await ctx.stateKeys()) ?? [];
+      const stepKeys = allKeys.filter((key) => key.startsWith("step_"));
+      const steps = await RestatePromise.all(
+        stepKeys.map(
+          (key) => ctx.get(key as any) as unknown as RestatePromise<Step>
+        )
+      );
+
+      if (resolveData === "none") {
+        return steps.map((step) => ({
+          ...step,
+          input: [],
+          output: undefined,
+        }));
+      }
+
+      return steps;
+    },
+
+    // events ------------------------------------------------------------------
+
+    async createEvent(
+      ctx: WorkflowContext,
+      data: CreateEventRequest,
+      params?: { resolveData?: "none" | "all" }
+    ) {
+      // Generate a unique event ID using current timestamp and random component
+      const eventId = `evnt_${ctx.rand.uuidv4()}`;
+      const eventKey = `event_${eventId}` as const;
+
+      const now = new Date();
+
+      const result: Event = {
+        ...data,
+        runId: ctx.key,
+        eventId,
+        createdAt: now,
+      };
+
+      ctx.set(eventKey, result);
+
+      if (data.correlationId) {
+        ctx.objectSendClient(keyValue, data.correlationId).append(ctx.key);
+      }
+
+      const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
+      return filterEventData(result, resolveData);
+    },
+
+    async listEvents(
+      ctx: WorkflowContext,
+      params: Omit<ListEventsParams, "runId"> // because it is already part of the key
+    ): Promise<Event[]> {
+      const resolveData = params.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
+      const allKeys = (await ctx.stateKeys()) ?? [];
+      const eventKeys = allKeys.filter((key) => key.startsWith("event_"));
+      const events = await RestatePromise.all(
+        eventKeys.map(
+          (key) => ctx.get(key as any) as unknown as RestatePromise<Event>
+        )
+      );
+
+      if (resolveData === "none") {
+        return events.map((event) => {
+          const { eventData: _eventData, ...rest } = event as any;
+          return rest;
+        });
+      }
+
+      return events;
+    },
   },
+
   options: {
     enableLazyState: true,
   },
 });
 
+export type HookContext = ObjectContext<{ hook: Hook }>;
+
 export const hooksApi = object({
   name: "hooks",
   handlers: {
-    async create(ctx: HookContext, data: CreateHookRequest) {
+    async create(
+      ctx: HookContext,
+      data: CreateHookRequest & { runId: string }
+    ) {
       const existing = await ctx.get("hook");
       if (existing) {
         throw new TerminalError("Hook already exists", {
@@ -321,7 +419,7 @@ export const hooksApi = object({
       const now = new Date();
 
       const result: Hook = {
-        runId: "virtual-run", // Virtual objects don't need filesystem-style runId tracking
+        runId: data.runId,
         hookId,
         token: data.token,
         metadata: data.metadata,
@@ -332,6 +430,10 @@ export const hooksApi = object({
       };
 
       ctx.set("hook", result);
+
+      if (data.token) {
+        ctx.objectSendClient(keyValue, data.token).append(hookId);
+      }
 
       return result;
     },
@@ -351,14 +453,82 @@ export const hooksApi = object({
         throw new TerminalError("Hook not found", { errorCode: 404 });
       }
 
-      // In a virtual object, we can't really "delete" state,
-      // but we can mark it as disposed or return the hook for cleanup
+      ctx.clear("hook");
+
+      if (hook.token) {
+        ctx.objectSendClient(keyValue, hook.token).clear();
+      }
+
       return hook;
     },
-
-    // Lists are not implemented yet as per instructions
   },
   options: {
     enableLazyState: true,
+  },
+});
+
+export const keyValue = object({
+  name: "kv",
+  handlers: {
+    async get(ctx: ObjectContext) {
+      return (await ctx.get<unknown[]>("value")) ?? [];
+    },
+
+    async set(ctx: ObjectContext, value: unknown[]) {
+      ctx.set("value", value);
+    },
+
+    async clear(ctx: ObjectContext) {
+      ctx.clear("value");
+    },
+
+    async append(ctx: ObjectContext, value: unknown) {
+      const existing = await ctx.get<unknown[]>("value");
+      const newValue = existing ? [...existing, value] : [value];
+      ctx.set("value", newValue);
+    },
+  },
+});
+
+export const indexService = service({
+  name: "indexService",
+  handlers: {
+    async getEventsByCorrelationId(
+      ctx: Context,
+      param: ListEventsByCorrelationIdParams
+    ): Promise<Event[]> {
+      const runIds = (await ctx
+        .objectClient(keyValue, param.correlationId)
+        .get()) as string[];
+      const matchingEvents: Event[] = [];
+      for (const runId of runIds || []) {
+        const events = await ctx
+          .objectClient(workflowApi, runId)
+          .listEvents({ resolveData: param.resolveData });
+
+        matchingEvents.push(
+          ...events.filter(
+            (event) => event.correlationId === param.correlationId
+          )
+        );
+      }
+      return matchingEvents;
+    },
+
+    async getHookByToken(
+      ctx: Context,
+      param: { token: string }
+    ): Promise<Hook> {
+      const hookTokens = (await ctx
+        .objectClient(keyValue, param.token)
+        .get()) as { runId: string; hookId: string }[];
+
+      if (hookTokens === undefined || hookTokens.length === 0) {
+        throw new TerminalError("No hooks found", { errorCode: 404 });
+      }
+      const theHook = hookTokens[0];
+      const hook = await ctx.objectClient(hooksApi, theHook!.hookId).get();
+      return hook;
+    },
   },
 });
