@@ -15,7 +15,10 @@ import {
   createServiceHandler,
   object,
   ObjectContext,
-  RestatePromise, RetryableError,
+  RestatePromise,
+  RetryableError,
+  rpc,
+  SendOpts,
   service,
   TerminalError,
 } from "@restatedev/restate-sdk";
@@ -384,7 +387,7 @@ export const workflowApi = object({
         let lastEventId = (await ctx.get("lastEventId")) ?? 0;
         lastEventId += 1;
         ctx.set("lastEventId", lastEventId);
-        
+
         const eventId = `evnt_${lastEventId}` as const;
 
         const now = new Date();
@@ -608,7 +611,7 @@ export const indexService = service({
       {
         output: serde.zod(WorkflowRunSchema.array()),
       },
-      async (ctx: Context, arg: { params?: ListWorkflowRunsParams}) => {
+      async (ctx: Context, arg: { params?: ListWorkflowRunsParams }) => {
         throw new TerminalError("Unimplemented yet", { errorCode: 501 });
       }
     ),
@@ -658,14 +661,20 @@ export const queue = service({
         );
 
         if (response.ok) {
-          return;
+          return { status: "delivered" };
         }
         if (response.status === 503) {
-          const {retryIn} = await response.json();
-          throw new RetryableError("Retrying", {
-            errorCode: 503,
-            retryAfter: { seconds: retryIn },
-          });
+          const { retryIn } = (await response.json()) as { retryIn: number };
+
+          ctx.serviceSendClient(queue).queue(
+            params,
+            rpc.sendOpts({
+              delay: { seconds: retryIn },
+              input: serde.zod(QueueParamsSchema),
+            })
+          );
+
+          return { status: "delayed", retryIn };
         }
 
         const text = await response.text();

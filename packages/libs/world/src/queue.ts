@@ -15,8 +15,6 @@ export function createQueue(client: Ingress, deliverTo: string): Queue {
   const queue: Queue["queue"] = async (name, body, opts?) => {
     const idempotencyKey = opts?.idempotencyKey;
 
-    console.log(body);
-
     const res = await client
       .serviceSendClient<QueueService>({ name: "queueService" })
       .queue(

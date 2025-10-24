@@ -16,9 +16,7 @@ import * as z4 from "zod/v4";
 
 export type { Serde } from "@restatedev/restate-sdk-core";
 
-class ZodSerde<T extends z4.ZodType>
-  implements Serde<z4.infer<T>>
-{
+class ZodSerde<T extends z4.ZodType> implements Serde<z4.infer<T>> {
   contentType? = "application/json";
   jsonSchema?: object | undefined;
 
@@ -27,27 +25,20 @@ class ZodSerde<T extends z4.ZodType>
       this.jsonSchema = z4.toJSONSchema(schema, {
         unrepresentable: "any",
       });
-    } 
-    if (
-      schema instanceof z4.ZodVoid ||
-      schema instanceof z4.ZodUndefined
-    ) {
+    }
+    if (schema instanceof z4.ZodVoid || schema instanceof z4.ZodUndefined) {
       this.contentType = undefined;
     }
   }
 
-  serialize(
-    value: z4.infer<T>
-  ): Uint8Array {
+  serialize(value: z4.infer<T>): Uint8Array {
     if (value === undefined) {
       return new Uint8Array(0);
     }
     return new TextEncoder().encode(JSON.stringify(value));
   }
 
-  deserialize(
-    data: Uint8Array
-  ): z4.infer<T> {
+  deserialize(data: Uint8Array): z4.infer<T> {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const js =
       data.length === 0

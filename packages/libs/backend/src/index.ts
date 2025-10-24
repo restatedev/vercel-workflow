@@ -1,5 +1,11 @@
 import { serve } from "@restatedev/restate-sdk";
-import { hooksApi, indexService, keyValue, queue, workflowApi } from "./services.js";
+import {
+  hooksApi,
+  indexService,
+  keyValue,
+  queue,
+  workflowApi,
+} from "./services.js";
 
 export type { WorkflowApi } from "./services.js";
 export type { HooksApi } from "./services.js";
