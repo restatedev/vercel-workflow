@@ -2,6 +2,10 @@
 
 A TypeScript monorepo demonstrating Restate integration with Vercel Workflow. See [DEVELOPMENT.md](./DEVELOPMENT.md) for comprehensive monorepo documentation.
 
+# Warning
+
+This integration is currently under construction.
+
 ## Packages
 
 - **`@restatedev/world`**: Package using typed client to implement World by talking to Restate virtual objects/services
