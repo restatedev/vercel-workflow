@@ -88,8 +88,19 @@ importers:
         specifier: ^5
         version: 5.9.3
 
+  packages/libs/backend:
+    dependencies:
+      '@restatedev/common':
+        specifier: workspace:*
+        version: link:../common
+
+  packages/libs/common: {}
+
   packages/libs/world:
     dependencies:
+      '@restatedev/common':
+        specifier: workspace:*
+        version: link:../common
       workflow:
         specifier: 'catalog:'
         version: 4.0.1-beta.2(@aws-sdk/client-sts@3.916.0)(@types/json-schema@7.0.15)(@types/node@24.7.2)(next@16.0.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(typescript@5.9.3)

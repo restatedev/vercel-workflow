@@ -1,5 +1,5 @@
 {
-  "name": "@restatedev/world",
+  "name": "@restatedev/backend",
   "version": "0.0.0",
   "description": "TODO: Add description",
   "author": "TODO: Add author",
@@ -48,8 +48,6 @@
     "prepublishOnly": "pnpm -w verify"
   },
   "dependencies": {
-    "@restatedev/common": "workspace:*",
-    "workflow": "catalog:",
-    "zod": "catalog:"
+    "@restatedev/common": "workspace:*"
   }
 }

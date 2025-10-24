@@ -4,11 +4,16 @@
     "composite": false,
     "baseUrl": ".",
     "paths": {
+      "@restatedev/backend": ["packages/libs/backend/src/index.ts"],
+      "@restatedev/common": ["packages/libs/common/src/index.ts"],
       "@restatedev/world": ["packages/libs/world/src/index.ts"]
     }
   },
   "files": [],
   "references": [
+    {
+      "path": "packages/libs/backend"
+    },
     {
       "path": "packages/libs/world"
     },
