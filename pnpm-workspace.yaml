@@ -5,3 +5,4 @@ packages:
 
 catalog:
   zod: ^4.1.12
+  workflow: ^4.0.1-beta.2

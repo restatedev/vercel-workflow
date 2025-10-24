@@ -28,6 +28,12 @@
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint ."
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "@restatedev/world": "workspace:*",
+    "workflow": "catalog:"
+  },
+  "devDependencies": {},
+  "peerDependencies": {
+    "workflow": "catalog:"
+  }
 }

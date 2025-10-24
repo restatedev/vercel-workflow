@@ -47,6 +47,9 @@
     "_check:api": "api-extractor run --local",
     "prepublishOnly": "pnpm -w verify"
   },
-  "dependencies": {},
+  "dependencies": {
+    "workflow": "catalog:",
+    "zod": "catalog:"
+  },
   "devDependencies": {}
 }
