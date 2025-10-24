@@ -348,6 +348,9 @@ export const workflowApi = object({
       const resolveData = params.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
       const allKeys = (await ctx.stateKeys()) ?? [];
       const eventKeys = allKeys.filter((key) => key.startsWith("event_"));
+      if (eventKeys.length === 0) {
+        return [];
+      }
       const events = await RestatePromise.all(
         eventKeys.map(
           (key) => ctx.get(key as any) as unknown as RestatePromise<Event>
@@ -552,6 +555,7 @@ export const queue = service({
           {
             method: "POST",
             body: body as BodyInit,
+            duplex: 'half',
             headers: {
               "x-vqs-queue-name": params.queueName,
               "x-vqs-message-id": messageId,
