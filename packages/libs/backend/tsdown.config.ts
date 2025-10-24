@@ -10,4 +10,5 @@ export default defineConfig({
   ignoreWatch: ["dist", ".turbo", "*.tsbuildinfo"],
   // Add any publishable packages from this monorepo that this package depends on
   external: [],
+  noExternal: ["@restatedev/common"],
 });
