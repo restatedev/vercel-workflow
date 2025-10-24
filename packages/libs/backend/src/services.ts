@@ -1,4 +1,3 @@
-
 /*
  * Copyright (c) TODO: Add copyright holder
  *
@@ -65,7 +64,10 @@ export const workflowApi = object({
   handlers: {
     // runs ------------------------------------------------------------------
 
-    async createRun(ctx: WorkflowContext, data: CreateWorkflowRunRequest) {
+    async createRun(
+      ctx: WorkflowContext,
+      data: CreateWorkflowRunRequest
+    ): Promise<WorkflowRun> {
       const existing = await ctx.get("run");
       if (existing) {
         throw new TerminalError("Workflow run already exists", {
@@ -96,7 +98,7 @@ export const workflowApi = object({
 
       ctx.set("run", result);
 
-      return {};
+      return result;
     },
 
     async getRun(ctx: WorkflowContext, params?: GetWorkflowRunParams) {
@@ -108,7 +110,10 @@ export const workflowApi = object({
       return filterRunData(run, resolveData);
     },
 
-    async updateRun(ctx: WorkflowContext, data: UpdateWorkflowRunRequest) {
+    async updateRun(
+      ctx: WorkflowContext,
+      data: UpdateWorkflowRunRequest
+    ): Promise<WorkflowRun> {
       const run = await ctx.get("run");
       if (!run) {
         throw new TerminalError("Workflow run not found", { errorCode: 404 });
@@ -136,44 +141,6 @@ export const workflowApi = object({
       ctx.set("run", updatedRun);
 
       return updatedRun;
-    },
-
-    async listRun(
-      ctx: WorkflowContext,
-      data?: ListWorkflowRunsParams
-    ): Promise<PaginatedResponse<WorkflowRun>> {
-      // TODO: Implement listing workflow runs
-      throw new TerminalError("Not implemented", { errorCode: 501 });
-
-      /*
-      const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-      const result = await paginatedFileSystemQuery({
-        directory: path.join(basedir, "runs"),
-        schema: WorkflowRunSchema,
-        filter: params?.workflowName
-          ? (run) => run.workflowName === params.workflowName
-          : undefined,
-        sortOrder: params?.pagination?.sortOrder ?? "desc",
-        limit: params?.pagination?.limit,
-        cursor: params?.pagination?.cursor,
-        getCreatedAt: getObjectCreatedAt("wrun"),
-        getId: (run) => run.runId,
-      });
-
-      // If resolveData is "none", replace input/output with empty data
-      if (resolveData === "none") {
-        return {
-          ...result,
-          data: result.data.map((run) => ({
-            ...run,
-            input: [],
-            output: undefined,
-          })),
-        };
-      }
-
-      return result;
-      */
     },
 
     async cancelRun(ctx: WorkflowContext, params?: CancelWorkflowRunParams) {
@@ -344,8 +311,7 @@ export const workflowApi = object({
 
     async createEvent(
       ctx: WorkflowContext,
-      data: CreateEventRequest,
-      params?: { resolveData?: "none" | "all" }
+      data: CreateEventRequest & { resolveData?: "none" | "all" }
     ) {
       // Generate a unique event ID using current timestamp and random component
       const eventId = `evnt_${ctx.rand.uuidv4()}`;
@@ -366,7 +332,7 @@ export const workflowApi = object({
         ctx.objectSendClient(keyValue, data.correlationId).append(ctx.key);
       }
 
-      const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
+      const resolveData = data.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
       return filterEventData(result, resolveData);
     },
 
@@ -500,6 +466,7 @@ export const indexService = service({
       const runIds = (await ctx
         .objectClient(keyValue, param.correlationId)
         .get()) as string[];
+
       const matchingEvents: Event[] = [];
       for (const runId of runIds || []) {
         const events = await ctx
@@ -530,10 +497,16 @@ export const indexService = service({
       const hook = await ctx.objectClient(hooksApi, theHook!.hookId).get();
       return hook;
     },
+
+    async listRun(
+      ctx: Context,
+      params?: ListWorkflowRunsParams
+    ): Promise<WorkflowRun[]> {
+      throw new TerminalError("Unimplemented yet", { errorCode: 501 });
+    },
   },
 });
 
-
 export type IndexService = typeof indexService;
 export type WorkflowApi = typeof workflowApi;
-export type HooksApi = typeof hooksApi; 
+export type HooksApi = typeof hooksApi;
