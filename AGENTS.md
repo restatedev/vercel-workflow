@@ -21,12 +21,19 @@ This document provides guidance for AI coding assistants (like Claude, Cursor, e
 
 ## Project Overview
 
-This is a TypeScript monorepo template built with:
+This is a TypeScript monorepo built with:
 - **PNPM Workspaces** for package management
 - **Turbo** for task orchestration and caching
 - **tsdown** for building publishable packages
 - **Vitest** for testing
 - **Changesets** for version management
+
+### Packages
+
+- **`@restatedev/world`**: Package using typed client to implement World by talking to Restate virtual objects/services
+- **`@restatedev/backend`**: Collection of Restate virtual objects and services
+- **`@restatedev/common`**: Common types package (private, not publishable)
+- **`@restatedev/workflow`**: Example package built using `workflow` package
 
 ## Key Concepts
 
@@ -70,6 +77,37 @@ This is a TypeScript monorepo template built with:
 - `api-extractor.base.json` - API validation configuration
 
 ## Common Tasks
+
+### Running Commands
+
+**Build:**
+- `pnpm build` - Build library packages only
+- `pnpm build:all` - Build everything including examples
+
+**Test:**
+- `pnpm test` - Run all tests
+- `pnpm test:watch` - Run tests in watch mode
+- `vitest run path/to/file.test.ts` - Run a single test file
+
+**Dev:**
+- `pnpm dev` - Type-check all library packages
+- `pnpm examples:dev` - Run workflow example
+- `pnpm examples:start <name>` - Start specific example in production mode
+
+**Inspect:**
+- `pnpm inspect` - Inspect workflows
+
+**Verify:**
+- `pnpm verify` - Run all checks (format, lint, types, build, test, exports, API) - **ALWAYS run before commit**
+
+**Lint/Format:**
+- `pnpm lint` - Run ESLint
+- `pnpm format` - Format code with Prettier
+- `pnpm check:format` - Check formatting without fixing
+
+**Clean:**
+- `pnpm clean` - Remove build artifacts
+- `pnpm clean:cache` - Clear Turbo cache
 
 ### Creating a New Package
 
@@ -133,22 +171,6 @@ All package scripts use Turbo with `--filter={.}...` pattern:
 - Internal scripts (e.g., `_build`) are the actual commands
 - The `--filter={.}...` pattern means "this package and its dependencies"
 
-### Running Checks
-
-**Before committing:**
-```bash
-pnpm verify
-```
-
-This runs:
-- Format check (`prettier`)
-- Lint (`eslint`)
-- Type check (`tsc --noEmit`)
-- Build all packages
-- Tests
-- Export validation (ATTW)
-- API validation (API Extractor)
-
 ### Adding Custom Entry Points
 
 **⚠️ INTERACTIVE COMMAND - Ask user to run it**
@@ -165,6 +187,87 @@ This will automatically update:
 - API Extractor configs
 - Package scripts"
 ```
+
+## Code Style Guidelines
+
+### TypeScript
+
+- **Strict mode enabled**: `strict: true`, `noUncheckedIndexedAccess: true`, `noImplicitOverride: true`
+- **Module system**: `NodeNext` modules and resolution (ESM)
+- **Target**: ES2022
+- **Explicit return types**: Required on all exported functions
+- **Type safety**: Avoid `any`, prefer `unknown` for truly unknown types
+- **No implicit any**: All parameters and variables must have explicit or inferred types
+
+### Formatting (Prettier)
+
+- **Indentation**: 2 spaces
+- **Semicolons**: Required
+- **Quotes**: Double quotes
+- **Line width**: 80 characters
+- **Trailing commas**: ES5 style (objects, arrays, but not function params in older contexts)
+
+### Linting (ESLint)
+
+- TypeScript ESLint with recommended type-checked rules
+- **Unused variables**: Prefix with `_` to indicate intentionally unused (e.g., `_error`, `_data`)
+- **Config files**: Disable type checking for `*.config.{js,ts,mjs,mts}` files
+
+### Imports
+
+- **ESM only**: All packages use `"type": "module"`
+- **File extensions**: Use `.js` extensions in imports for local files (TypeScript convention for ESM)
+  ```typescript
+  import { hello } from "./utils.js"; // Correct
+  import { hello } from "./utils";    // Incorrect
+  ```
+- **Import order**: No strict enforcement, but generally: external deps → workspace deps → relative imports
+
+### Naming Conventions
+
+- **Variables/Functions**: camelCase (e.g., `getUserData`, `isActive`)
+- **Types/Interfaces/Classes**: PascalCase (e.g., `UserProfile`, `ApiResponse`)
+- **Files**: kebab-case (e.g., `user-profile.ts`, `api-client.ts`)
+- **Constants**: camelCase or UPPER_SNAKE_CASE for true constants (e.g., `MAX_RETRIES`)
+
+### Error Handling
+
+- **Throw `Error` objects**: Always throw proper Error instances or custom error classes
+- **Use `FatalError`**: For workflow-specific errors that should not be retried
+- **Document errors**: Use JSDoc to document error conditions
+  ```typescript
+  /**
+   * Fetches user data from the API
+   * @throws {Error} If the network request fails
+   * @throws {FatalError} If the user ID is invalid
+   */
+  async function fetchUser(id: string) { ... }
+  ```
+
+### File Headers
+
+All TypeScript files should include a copyright header:
+```typescript
+/*
+ * Copyright (c) TODO: Add copyright holder
+ *
+ * This file is part of TODO: Add project name,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * TODO: Add repository URL
+ */
+```
+
+Templates already include this header. Update the TODOs when customizing for your project.
+
+### Comments
+
+- **Minimal inline comments**: Prefer self-documenting code with clear variable and function names
+- **JSDoc for public APIs**: Document all exported functions, classes, and types
+- **Explain "why" not "what"**: Comments should explain reasoning, not restate the code
+- **TODO comments**: Use `// TODO:` for temporary notes, but address them before committing
 
 ## Configuration Patterns
 
@@ -211,24 +314,6 @@ Standard order for consistency:
 }
 ```
 
-### File Headers
-
-All TypeScript files should include a copyright header:
-```typescript
-/*
- * Copyright (c) TODO: Add copyright holder
- *
- * This file is part of TODO: Add project name,
- * which is released under the MIT license.
- *
- * You can find a copy of the license in file LICENSE in the root
- * directory of this repository or package, or at
- * TODO: Add repository URL
- */
-```
-
-Templates already include this header. Update the TODOs when customizing for your project.
-
 ## Development Workflow
 
 ### Typical Development Session
@@ -240,8 +325,8 @@ pnpm dev
 # In another terminal, run tests in watch mode
 pnpm test:watch
 
-# In another terminal, run an example
-pnpm examples:dev my-example
+# In another terminal, run the workflow example
+pnpm examples:dev
 ```
 
 Changes to lib source files are immediately reflected in tests and examples - no build required!
