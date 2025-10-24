@@ -15,7 +15,7 @@ import {
   createServiceHandler,
   object,
   ObjectContext,
-  RestatePromise,
+  RestatePromise, RetryableError,
   service,
   TerminalError,
 } from "@restatedev/restate-sdk";
@@ -659,6 +659,13 @@ export const queue = service({
 
         if (response.ok) {
           return;
+        }
+        if (response.status === 503) {
+          const {retryIn} = await response.json();
+          throw new RetryableError("Retrying", {
+            errorCode: 503,
+            retryAfter: { seconds: retryIn },
+          });
         }
 
         const text = await response.text();
