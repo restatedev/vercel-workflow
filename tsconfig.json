@@ -3,7 +3,17 @@
   "compilerOptions": {
     "composite": false,
     "baseUrl": ".",
-    "paths": {}
+    "paths": {
+      "@restatedev/world": ["packages/libs/world/src/index.ts"]
+    }
   },
-  "files": []
+  "files": [],
+  "references": [
+    {
+      "path": "packages/libs/world"
+    },
+    {
+      "path": "packages/examples/workflow"
+    }
+  ]
 }

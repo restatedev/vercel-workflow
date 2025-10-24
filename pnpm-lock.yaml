@@ -57,6 +57,10 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@24.7.2)(jiti@2.6.1)(tsx@4.20.6)
 
+  packages/examples/workflow: {}
+
+  packages/libs/world: {}
+
 packages:
 
   '@andrewbranch/untar.js@1.0.3':

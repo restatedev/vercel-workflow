@@ -1,0 +1,33 @@
+{
+  "name": "@restatedev/workflow",
+  "version": "0.0.0",
+  "description": "TODO: Add description",
+  "author": "TODO: Add author",
+  "email": "TODO: Add email",
+  "license": "MIT",
+  "homepage": "TODO: Add homepage URL",
+  "repository": {
+    "type": "git",
+    "url": "TODO: Add repository URL"
+  },
+  "bugs": {
+    "url": "TODO: Add bugs URL"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "turbo run _test --filter={.}...",
+    "_test": "vitest run",
+    "build": "turbo run _build --filter={.}...",
+    "_build": "tsc --project tsconfig.build.json",
+    "dev": "tsx watch --tsconfig ./tsconfig.json ./src/index.ts",
+    "start": "turbo run _start --filter={.}...",
+    "_start": "node ./dist/index.js",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "lint": "eslint ."
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
