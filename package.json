@@ -28,7 +28,8 @@
     "add-entry": "plop add-entry",
     "generate:configs": "node scripts/generate-example-configs.mjs",
     "deps:check": "pnpm outdated",
-    "deps:update": "pnpm update --latest --recursive"
+    "deps:update": "pnpm update --latest --recursive",
+    "inspect": "pnpm --filter \"./packages/examples/*\" inspect"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
