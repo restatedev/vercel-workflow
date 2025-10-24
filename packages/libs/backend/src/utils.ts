@@ -1,4 +1,4 @@
-import { Hook, Step, WorkflowRun } from "@workflow/world";
+import { Hook, Step, WorkflowRun, Event } from "@workflow/world";
 
 export const DEFAULT_RESOLVE_DATA_OPTION = "all";
 
