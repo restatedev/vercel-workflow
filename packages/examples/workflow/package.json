@@ -35,8 +35,8 @@
     "next": "16.0.0"
   },
   "devDependencies": {
-    "typescript": "^5",
-    "@types/node": "^20",
+    "typescript": "catalog:",
+    "@types/node": "catalog:",
     "@types/react": "^19"
   },
   "peerDependencies": {

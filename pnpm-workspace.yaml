@@ -4,5 +4,22 @@ packages:
   - packages/examples/*
 
 catalog:
+  # Existing
   zod: ^4.1.12
   workflow: ^4.0.1-beta.2
+
+  # Restate SDK (all packages use same version)
+  "@restatedev/restate-sdk": 1.9.0
+  "@restatedev/restate-sdk-zod": 1.9.0
+  "@restatedev/restate-sdk-clients": 1.9.0
+  "@restatedev/restate-sdk-core": 1.9.0
+
+  # Workflow world
+  "@workflow/world": ^4.0.1-beta.1
+
+  # Vercel
+  "@vercel/queue": 0.0.0-alpha.23
+
+  # Development dependencies
+  "@types/node": ^24.7.2
+  typescript: ^5.9.3
