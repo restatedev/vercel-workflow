@@ -5,7 +5,7 @@ import json from "@eslint/json";
 
 export default [
   {
-    ignores: ["**/dist/**", "**/node_modules/**", ".turbo/**"],
+    ignores: ["**/dist/**", "**/node_modules/**", ".turbo/**", "**/.next/**"],
   },
 
   {
