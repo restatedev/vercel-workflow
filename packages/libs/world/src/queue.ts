@@ -3,6 +3,7 @@ import { JsonTransport } from "@vercel/queue";
 import z from "zod/v4";
 import { Ingress, rpc } from "@restatedev/restate-sdk-clients";
 import { QueueService } from "@restatedev/backend";
+import { QueueParamsSchema, serde } from "@restatedev/common";
 
 const HeaderParser = z.object({
   "x-vqs-queue-name": ValidQueueName,
@@ -14,6 +15,8 @@ export function createQueue(client: Ingress, deliverTo: string): Queue {
   const queue: Queue["queue"] = async (name, body, opts?) => {
     const idempotencyKey = opts?.idempotencyKey;
 
+    console.log(body);
+
     const res = await client
       .serviceSendClient<QueueService>({ name: "queueService" })
       .queue(
@@ -22,7 +25,7 @@ export function createQueue(client: Ingress, deliverTo: string): Queue {
           queueName: name,
           message: body,
         },
-        rpc.sendOpts({ idempotencyKey })
+        rpc.sendOpts({ idempotencyKey, input: serde.zod(QueueParamsSchema) })
       );
 
     const messageId = res.invocationId as MessageId;

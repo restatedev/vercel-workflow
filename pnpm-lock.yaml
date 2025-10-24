@@ -96,6 +96,9 @@ importers:
       '@restatedev/restate-sdk':
         specifier: 1.9.0
         version: 1.9.0
+      '@restatedev/restate-sdk-zod':
+        specifier: 1.9.0
+        version: 1.9.0(zod@4.1.12)
       '@vercel/queue':
         specifier: 0.0.0-alpha.23
         version: 0.0.0-alpha.23
@@ -103,7 +106,17 @@ importers:
         specifier: ^4.0.1-beta.1
         version: 4.0.1-beta.1(@types/json-schema@7.0.15)(@types/node@24.7.2)(zod@4.1.12)
 
-  packages/libs/common: {}
+  packages/libs/common:
+    dependencies:
+      '@restatedev/restate-sdk-core':
+        specifier: 1.9.0
+        version: 1.9.0
+      '@workflow/world':
+        specifier: ^4.0.1-beta.1
+        version: 4.0.1-beta.1(@types/json-schema@7.0.15)(@types/node@24.7.2)(zod@4.1.12)
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
 
   packages/libs/world:
     dependencies:
@@ -113,6 +126,9 @@ importers:
       '@restatedev/restate-sdk-clients':
         specifier: 1.9.0
         version: 1.9.0
+      '@restatedev/restate-sdk-zod':
+        specifier: 1.9.0
+        version: 1.9.0(zod@4.1.12)
       '@vercel/queue':
         specifier: 0.0.0-alpha.23
         version: 0.0.0-alpha.23
@@ -905,6 +921,12 @@ packages:
   '@restatedev/restate-sdk-core@1.9.0':
     resolution: {integrity: sha512-q3S7hnxcP3zU8cDcaAkYmO50zT8dykzaBm65D+hyJgba74gs/h5HMjbS8gbZgRezbJHtRrRsJmnNFet/qCj4pQ==}
     engines: {node: '>= 20.19'}
+
+  '@restatedev/restate-sdk-zod@1.9.0':
+    resolution: {integrity: sha512-0edkryb8YSo6ErM2OIeHYtR1FNyN7NwHzujwjmz3ag8ayptSjdBA8B80IZhZ8o8mniYtbJNcj+Yhcyvq6LHzHQ==}
+    engines: {node: '>= 20.19'}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
 
   '@restatedev/restate-sdk@1.9.0':
     resolution: {integrity: sha512-PSvFpiD7qGN1DVBWuFHR4x5j8Mk6rAl5r75/XUAfW/YN/YchuTK4jIO4nqBLvbJ4dzioDlFbLmLZprKBVfX2tA==}
@@ -4571,6 +4593,10 @@ snapshots:
       '@restatedev/restate-sdk-core': 1.9.0
 
   '@restatedev/restate-sdk-core@1.9.0': {}
+
+  '@restatedev/restate-sdk-zod@1.9.0(zod@4.1.12)':
+    dependencies:
+      zod: 4.1.12
 
   '@restatedev/restate-sdk@1.9.0':
     dependencies:

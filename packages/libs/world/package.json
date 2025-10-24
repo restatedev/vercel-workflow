@@ -51,6 +51,7 @@
     "@restatedev/common": "workspace:*",
     "@workflow/world": "^4.0.1-beta.1",
     "@restatedev/restate-sdk-clients": "1.9.0",
+    "@restatedev/restate-sdk-zod": "1.9.0",
     "@vercel/queue": "0.0.0-alpha.23",
     "workflow": "catalog:",
     "zod": "catalog:"

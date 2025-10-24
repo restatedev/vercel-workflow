@@ -1,33 +1,39 @@
-import { connect, Ingress } from "@restatedev/restate-sdk-clients";
+import {  Ingress, rpc } from "@restatedev/restate-sdk-clients";
 
-import type {
-  CancelWorkflowRunParams,
-  CreateEventParams,
-  CreateEventRequest,
-  CreateHookRequest,
-  CreateStepRequest,
-  CreateWorkflowRunRequest,
-  Event,
-  GetHookParams,
-  GetStepParams,
-  GetWorkflowRunParams,
-  Hook,
-  ListEventsByCorrelationIdParams,
-  ListEventsParams,
-  ListHooksParams,
-  ListWorkflowRunsParams,
-  ListWorkflowRunStepsParams,
-  PaginatedResponse,
-  PauseWorkflowRunParams,
-  ResumeWorkflowRunParams,
-  Step,
-  Storage,
-  UpdateStepRequest,
-  UpdateWorkflowRunRequest,
-  WorkflowRun,
+import {
+  EventSchema,
+  HookSchema,
+  StepSchema,
+  WorkflowRunSchema,
+  type CancelWorkflowRunParams,
+  type CreateEventParams,
+  type CreateEventRequest,
+  type CreateHookRequest,
+  type CreateStepRequest,
+  type CreateWorkflowRunRequest,
+  type Event,
+  type GetHookParams,
+  type GetStepParams,
+  type GetWorkflowRunParams,
+  type Hook,
+  type ListEventsByCorrelationIdParams,
+  type ListEventsParams,
+  type ListHooksParams,
+  type ListWorkflowRunsParams,
+  type ListWorkflowRunStepsParams,
+  type PaginatedResponse,
+  type PauseWorkflowRunParams,
+  type ResumeWorkflowRunParams,
+  type Step,
+  type Storage,
+  type UpdateStepRequest,
+  type UpdateWorkflowRunRequest,
+  type WorkflowRun,
 } from "@workflow/world";
 
 import type { IndexService, WorkflowApi, HooksApi } from "@restatedev/backend";
+import { serde } from "@restatedev/common";
+
 
 const createStorage = (client: Ingress): Storage => {
   return {
@@ -39,7 +45,7 @@ const createStorage = (client: Ingress): Storage => {
 
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .createRun(data);
+          .createRun(data, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
 
         return res;
       },
@@ -50,26 +56,31 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<WorkflowRun> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .getRun(params);
+          .getRun(params, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
         return res;
       },
+
       update: async function (
         id: string,
         data: UpdateWorkflowRunRequest
       ): Promise<WorkflowRun> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .updateRun(data);
+          .updateRun(data, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
 
         return res;
       },
 
       list: async function (
         params?: ListWorkflowRunsParams
+        
       ): Promise<PaginatedResponse<WorkflowRun>> {
         const res = await client
           .serviceClient<IndexService>({ name: "indexService" })
-          .listRun(params);
+          .listRun(
+            { params },
+            rpc.opts({ output: serde.zod(WorkflowRunSchema.array()) })
+          );
 
         return {
           data: res,
@@ -84,7 +95,10 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<WorkflowRun> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .cancelRun(params);
+          .cancelRun(
+            params,
+            rpc.opts({ output: serde.zod(WorkflowRunSchema) })
+          );
         return res;
       },
       pause: async function (
@@ -93,7 +107,7 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<WorkflowRun> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .pauseRun(params);
+          .pauseRun(params, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
         return res;
       },
       resume: async function (
@@ -102,7 +116,7 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<WorkflowRun> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .resumeRun(params);
+          .resumeRun(params, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
         return res;
       },
     },
@@ -113,7 +127,7 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<Step> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .createStep(data);
+          .createStep(data, rpc.opts({ output: serde.zod(StepSchema) }));
         return res;
       },
       get: async function (
@@ -126,7 +140,7 @@ const createStorage = (client: Ingress): Storage => {
         }
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .getStep({ stepId, ...params });
+          .getStep({ stepId, ...params }, rpc.opts({ output: serde.zod(StepSchema) }));
         return res;
       },
       update: async function (
@@ -136,7 +150,7 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<Step> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .updateStep({ stepId, ...data });
+          .updateStep({ stepId, ...data }, rpc.opts({ output: serde.zod(StepSchema) }));
         return res;
       },
       list: async function (
@@ -144,7 +158,10 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<PaginatedResponse<Step>> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, params.runId)
-          .listSteps(params);
+          .listSteps(
+            params,
+            rpc.opts({ output: serde.zod(StepSchema.array()) })
+          );
 
         return {
           data: res,
@@ -161,7 +178,7 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<Event> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .createEvent({ ...data, ...params });
+          .createEvent({ ...data, ...params }, rpc.opts({ output: serde.zod(EventSchema) }));
         return res;
       },
 
@@ -170,7 +187,10 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<PaginatedResponse<Event>> {
         const res = await client
           .objectClient<WorkflowApi>({ name: "workflow" }, params.runId)
-          .listEvents(params);
+          .listEvents(
+            params,
+            rpc.opts({ output: serde.zod(EventSchema.array()) })
+          );
 
         return {
           data: res,
@@ -183,7 +203,10 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<PaginatedResponse<Event>> {
         const res = await client
           .serviceClient<IndexService>({ name: "indexService" })
-          .getEventsByCorrelationId(params);
+          .getEventsByCorrelationId(
+            params,
+            rpc.opts({ output: serde.zod(EventSchema.array()) })
+          );
 
         return {
           data: res,
@@ -200,7 +223,10 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<Hook> {
         const res = await client
           .objectClient<HooksApi>({ name: "hooks" }, data.hookId)
-          .create({ ...data, ...params, runId });
+          .create(
+            { ...data, ...params, runId },
+            rpc.opts({ output: serde.zod(HookSchema) })
+          );
 
         return res;
       },
@@ -211,7 +237,8 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<Hook> {
         const res = await client
           .objectClient<HooksApi>({ name: "hooks" }, hookId)
-          .get(params);
+          .get(params, rpc.opts({ output: serde.zod(HookSchema) }));
+          
         return res;
       },
       getByToken: async function (
@@ -220,9 +247,10 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<Hook> {
         const res = await client
           .serviceClient<IndexService>({ name: "indexService" })
-          .getHookByToken({ ...params, token });
+          .getHookByToken({ ...params, token }, rpc.opts({ output: serde.zod(HookSchema) }));
         return res;
       },
+
       list: async function (
         params: ListHooksParams
       ): Promise<PaginatedResponse<Hook>> {
@@ -236,7 +264,7 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<Hook> {
         const res = await client
           .objectClient<HooksApi>({ name: "hooks" }, hookId)
-          .dispose();
+          .dispose(rpc.opts({ output: serde.zod(HookSchema) }));
         return res;
       },
     },
