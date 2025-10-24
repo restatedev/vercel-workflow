@@ -96,6 +96,9 @@ importers:
       '@restatedev/restate-sdk':
         specifier: 1.9.0
         version: 1.9.0
+      '@vercel/queue':
+        specifier: 0.0.0-alpha.23
+        version: 0.0.0-alpha.23
       '@workflow/world':
         specifier: ^4.0.1-beta.1
         version: 4.0.1-beta.1(@types/json-schema@7.0.15)(@types/node@24.7.2)(zod@4.1.12)
@@ -110,6 +113,9 @@ importers:
       '@restatedev/restate-sdk-clients':
         specifier: 1.9.0
         version: 1.9.0
+      '@vercel/queue':
+        specifier: 0.0.0-alpha.23
+        version: 0.0.0-alpha.23
       '@workflow/world':
         specifier: ^4.0.1-beta.1
         version: 4.0.1-beta.1(@types/json-schema@7.0.15)(@types/node@24.7.2)(zod@4.1.12)

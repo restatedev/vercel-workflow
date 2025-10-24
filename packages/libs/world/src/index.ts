@@ -8,8 +8,29 @@
  * directory of this repository or package, or at
  * TODO: Add repository URL
  */
-import { commonHello } from "@restatedev/common";
 
-export function hello(name: string): string {
-  return commonHello(name);
+import { connect, type ConnectionOpts } from "@restatedev/restate-sdk-clients";
+import { World } from "@workflow/world";
+import { createQueue } from "./queue.js";
+import { createStorage } from "./storage.js";
+import { createStreamer } from "./streamer.js";
+import { auth } from "./auth.js";
+
+export function createWorld(args?: {
+  opts: ConnectionOpts;
+  deliverTo: string;
+}): World & { start(): Promise<void> } {
+  const connOpts = args?.opts ?? { url: "http://localhost:8080" };
+  const deliverTo = args?.deliverTo ?? "http://localhost:3000";
+
+  const client = connect(connOpts);
+  return {
+    ...createQueue(client, deliverTo),
+    ...createStorage(client),
+    ...createStreamer(client),
+    ...auth,
+    start: async () => {
+      // TODO: verify subscription
+    },
+  };
 }

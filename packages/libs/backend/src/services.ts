@@ -11,6 +11,7 @@
 
 import {
   Context,
+  createServiceHandler,
   object,
   ObjectContext,
   RestatePromise,
@@ -40,6 +41,8 @@ import {
   type ListEventsParams,
   ListWorkflowRunStepsParams,
   ListEventsByCorrelationIdParams,
+  ValidQueueName,
+  QueuePayload,
 } from "@workflow/world";
 import {
   DEFAULT_RESOLVE_DATA_OPTION,
@@ -48,6 +51,8 @@ import {
   filterHookData,
   filterEventData,
 } from "./utils.js";
+
+import { JsonTransport } from "@vercel/queue";
 
 // key by runId
 
@@ -507,6 +512,66 @@ export const indexService = service({
   },
 });
 
+const transport = new JsonTransport();
+
+export const queue = service({
+  name: "queueService",
+  handlers: {
+    queue: createServiceHandler(
+      {
+        retryPolicy: {
+          maxAttempts: 10,
+          maxInterval: { seconds: 6 },
+          onMaxAttempts: "kill",
+        },
+      },
+      async (
+        ctx: Context,
+        params: {
+          deliverTo: string;
+          queueName: ValidQueueName;
+          message: QueuePayload;
+          opts?: { deploymentId?: string; idempotencyKey?: string };
+        }
+      ) => {
+        let pathname: string;
+        if (params.queueName.startsWith("__wkf_step_")) {
+          pathname = `step`;
+        } else if (params.queueName.startsWith("__wkf_workflow_")) {
+          pathname = `flow`;
+        } else {
+          throw new Error("Unknown queue name prefix");
+        }
+
+        const messageId = ctx.request().id;
+
+        const body = transport.serialize(params.message);
+
+        const response = await fetch(
+          `${params.deliverTo}/.well-known/workflow/v1/${pathname}`,
+          {
+            method: "POST",
+            body: body as BodyInit,
+            headers: {
+              "x-vqs-queue-name": params.queueName,
+              "x-vqs-message-id": messageId,
+              "x-vqs-message-attempt": String(1), // TODO: fix this.
+            },
+          }
+        );
+
+        if (response.ok) {
+          return;
+        }
+
+        const text = await response.text();
+        return text;
+      }
+    ),
+  },
+});
+
 export type IndexService = typeof indexService;
 export type WorkflowApi = typeof workflowApi;
 export type HooksApi = typeof hooksApi;
+export type QueueService = typeof queue;
