@@ -3,3 +3,5 @@ dist
 *.tsbuildinfo
 .turbo
 .DS_Store
+.next
+.swc

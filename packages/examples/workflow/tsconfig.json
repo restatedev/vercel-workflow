@@ -1,7 +1,17 @@
 {
   "extends": "../../../tsconfig.json",
   "compilerOptions": {
-    "composite": false
+    "composite": false,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*",
+    ".next/types/**/*.ts",
+    "next-env.d.ts",
+    ".next/dev/types/**/*.ts"
+  ]
 }
