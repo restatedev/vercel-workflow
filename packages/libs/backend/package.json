@@ -48,6 +48,7 @@
     "prepublishOnly": "pnpm -w verify"
   },
   "dependencies": {
-    "@restatedev/common": "workspace:*"
+    "@restatedev/common": "workspace:*",
+    "@restatedev/restate-sdk": "1.9.0"
   }
 }

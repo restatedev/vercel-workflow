@@ -93,6 +93,9 @@ importers:
       '@restatedev/common':
         specifier: workspace:*
         version: link:../common
+      '@restatedev/restate-sdk':
+        specifier: 1.9.0
+        version: 1.9.0
 
   packages/libs/common: {}
 
@@ -101,6 +104,12 @@ importers:
       '@restatedev/common':
         specifier: workspace:*
         version: link:../common
+      '@restatedev/restate-sdk-clients':
+        specifier: 1.9.0
+        version: 1.9.0
+      '@workflow/world':
+        specifier: ^4.0.1-beta.1
+        version: 4.0.1-beta.1(@types/json-schema@7.0.15)(@types/node@24.7.2)(zod@4.1.12)
       workflow:
         specifier: 'catalog:'
         version: 4.0.1-beta.2(@aws-sdk/client-sts@3.916.0)(@types/json-schema@7.0.15)(@types/node@24.7.2)(next@16.0.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(typescript@5.9.3)
@@ -879,6 +888,18 @@ packages:
 
   '@quansync/fs@0.1.5':
     resolution: {integrity: sha512-lNS9hL2aS2NZgNW7BBj+6EBl4rOf8l+tQ0eRY6JWCI8jI2kc53gSoqbjojU0OnAWhzoXiOjFyGsHcDGePB3lhA==}
+
+  '@restatedev/restate-sdk-clients@1.9.0':
+    resolution: {integrity: sha512-vgKlDXQ4fkR9EU+MF/37edxmrLfFlGlorXsbumhkriGgBVimTKigdl/sdSphcAqdnPIq/tBd3H18Qj83uxKezQ==}
+    engines: {node: '>= 20.19'}
+
+  '@restatedev/restate-sdk-core@1.9.0':
+    resolution: {integrity: sha512-q3S7hnxcP3zU8cDcaAkYmO50zT8dykzaBm65D+hyJgba74gs/h5HMjbS8gbZgRezbJHtRrRsJmnNFet/qCj4pQ==}
+    engines: {node: '>= 20.19'}
+
+  '@restatedev/restate-sdk@1.9.0':
+    resolution: {integrity: sha512-PSvFpiD7qGN1DVBWuFHR4x5j8Mk6rAl5r75/XUAfW/YN/YchuTK4jIO4nqBLvbJ4dzioDlFbLmLZprKBVfX2tA==}
+    engines: {node: '>= 20.19'}
 
   '@rolldown/binding-android-arm64@1.0.0-beta.44':
     resolution: {integrity: sha512-g9ejDOehJFhxC1DIXQuZQ9bKv4lRDioOTL42cJjFjqKPl1L7DVb9QQQE1FxokGEIMr6FezLipxwnzOXWe7DNPg==}
@@ -4536,6 +4557,16 @@ snapshots:
     dependencies:
       quansync: 0.2.11
 
+  '@restatedev/restate-sdk-clients@1.9.0':
+    dependencies:
+      '@restatedev/restate-sdk-core': 1.9.0
+
+  '@restatedev/restate-sdk-core@1.9.0': {}
+
+  '@restatedev/restate-sdk@1.9.0':
+    dependencies:
+      '@restatedev/restate-sdk-core': 1.9.0
+
   '@rolldown/binding-android-arm64@1.0.0-beta.44':
     optional: true
 
@@ -5551,6 +5582,12 @@ snapshots:
       '@types/json-schema': 7.0.15
       '@types/node': 24.7.2
       zod: 4.1.11
+
+  '@workflow/world@4.0.1-beta.1(@types/json-schema@7.0.15)(@types/node@24.7.2)(zod@4.1.12)':
+    dependencies:
+      '@types/json-schema': 7.0.15
+      '@types/node': 24.7.2
+      zod: 4.1.12
 
   acorn-jsx@5.3.2(acorn@8.15.0):
     dependencies:
