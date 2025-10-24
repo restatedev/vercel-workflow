@@ -9,6 +9,6 @@
  * TODO: Add repository URL
  */
 
-export function hello(name: string): string {
+export function commonHello(name: string): string {
   return `Hello, ${name}!`;
 }

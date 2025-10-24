@@ -8,7 +8,8 @@
  * directory of this repository or package, or at
  * TODO: Add repository URL
  */
+import { commonHello } from "@restatedev/common";
 
 export function hello(name: string): string {
-  return `Hello, ${name}!`;
+  return commonHello(name);
 }
