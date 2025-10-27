@@ -149,7 +149,7 @@ importers:
         version: 4.1.12
 
   packages/libs/world:
-    dependencies:
+    devDependencies:
       '@restatedev/common':
         specifier: workspace:*
         version: link:../common
