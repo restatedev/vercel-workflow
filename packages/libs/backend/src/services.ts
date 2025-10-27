@@ -16,6 +16,7 @@ import {
   object,
   ObjectContext,
   RestatePromise,
+  rpc,
   service,
   TerminalError,
 } from "@restatedev/restate-sdk";
@@ -113,12 +114,17 @@ export const workflow = object({
 
         ctx.set("run", result, serde.zod(WorkflowRunSchema));
 
+        // Build index
+        ctx.objectSendClient(keyValue, "workflows").append(runId);
+
         return result;
       }
     ),
 
     getRun: createObjectHandler(
       {
+        // No need to have journal retention for this handler, as it just performs reads
+        journalRetention: { milliseconds: 0 },
         output: serde.zod(WorkflowRunSchema),
       },
       async (ctx: WorkflowContext, params: GetWorkflowRunParams) => {
@@ -287,6 +293,8 @@ export const workflow = object({
 
     getStep: createObjectHandler(
       {
+        // No need to have journal retention for this handler, as it just performs reads
+        journalRetention: { milliseconds: 0 },
         output: serde.zod(StepSchema),
       },
       async (
@@ -339,6 +347,8 @@ export const workflow = object({
 
     listSteps: createObjectHandler(
       {
+        // No need to have journal retention for this handler, as it just performs reads
+        journalRetention: { milliseconds: 0 },
         output: serde.zod(StepSchema.array()),
       },
       async (ctx: WorkflowContext, params: ListWorkflowRunStepsParams) => {
@@ -408,6 +418,8 @@ export const workflow = object({
 
     listEvents: createObjectHandler(
       {
+        // No need to have journal retention for this handler, as it just performs reads
+        journalRetention: { milliseconds: 0 },
         output: serde.zod(EventSchema.array()),
       },
       async (
@@ -487,6 +499,8 @@ export const workflow = object({
 
     getHook: createObjectHandler(
       {
+        // No need to have journal retention for this handler, as it just performs reads
+        journalRetention: { milliseconds: 0 },
         output: serde.zod(HookSchema),
       },
       async (
@@ -506,6 +520,8 @@ export const workflow = object({
 
     listHooks: createObjectHandler(
       {
+        // No need to have journal retention for this handler, as it just performs reads
+        journalRetention: { milliseconds: 0 },
         output: serde.zod(HookSchema.array()),
       },
       async (
@@ -594,6 +610,10 @@ export const keyValue = object({
       ctx.set("value", newValue);
     },
   },
+  options: {
+    // No need to have journal retention for this service
+    journalRetention: { milliseconds: 0 },
+  },
 });
 
 export const index = service({
@@ -615,7 +635,7 @@ export const index = service({
         for (const runId of runIds || []) {
           const events = await ctx
             .objectClient(workflow, runId)
-            .listEvents({ resolveData: param.resolveData });
+            .listEvents({ resolveData: param.resolveData }, rpc.opts({output: serde.zod(EventSchema.array())}));
 
           matchingEvents.push(
             ...events.filter(
@@ -645,7 +665,7 @@ export const index = service({
         return await ctx.objectClient(workflow, runId[0]!).getHook({
           hookId: param.hookId,
           resolveData: param.resolveData,
-        });
+        }, rpc.opts({output: serde.zod(HookSchema)}));
       }
     ),
 
@@ -669,7 +689,7 @@ export const index = service({
           .getHook({
             hookId: runIdAndHookId[0]!.hookId,
             resolveData: param.resolveData,
-          });
+          }, rpc.opts({output: serde.zod(HookSchema)}));
       }
     ),
 
@@ -677,17 +697,40 @@ export const index = service({
       {
         output: serde.zod(WorkflowRunSchema.array()),
       },
-      async (ctx: Context, params: ListWorkflowRunsParams) => {
-        throw new TerminalError("Unimplemented yet", { errorCode: 501 });
-      }
-    ),
+      async (
+        ctx: Context,
+        params: ListWorkflowRunsParams
+      ): Promise<WorkflowRun[]> => {
+        const runIds = (await ctx
+          .objectClient(keyValue, "workflows")
+          .get()) as string[];
 
-    listHooks: createServiceHandler(
-      {
-        output: serde.zod(WorkflowRunSchema.array()),
-      },
-      async (ctx: Context, params: ListWorkflowRunsParams) => {
-        throw new TerminalError("Unimplemented yet", { errorCode: 501 });
+        const orderingSign = params.pagination?.sortOrder === "desc" ? -1 : 1;
+        return (
+          (
+            await RestatePromise.all(
+              runIds.map((runId) =>
+                ctx.objectClient(workflow, runId).getRun({
+                  resolveData: params.resolveData,
+                }, rpc.opts({output: serde.zod(WorkflowRunSchema)}))
+              )
+            )
+          )
+            // Apply filters
+            .filter((run) =>
+              params.status !== undefined ? run.status === params.status : true
+            )
+            .filter((run) =>
+              params.workflowName !== undefined
+                ? run.workflowName === params.workflowName
+                : true
+            )
+            // Sort as requested
+            .sort(
+              (a, b) =>
+                (a.createdAt.getTime() - b.createdAt.getTime()) * orderingSign
+            )
+        );
       }
     ),
   },

@@ -22,7 +22,7 @@ export const queue = service({
         input: serde.zod(schemas.QueueParamsSchema),
       },
       async (ctx: Context, params) => {
-        // We use Restate invocation id as message id
+        // We use Restate invocation id as the message id
         const messageId = ctx.request().id;
 
         // Serialize using vercel transport
