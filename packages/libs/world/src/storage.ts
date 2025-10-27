@@ -31,7 +31,7 @@ import {
   WorkflowRunSchema,
 } from "@workflow/world";
 
-import type { HooksApi, IndexService, WorkflowApi } from "@restatedev/backend";
+import type { IndexApi, WorkflowApi } from "@restatedev/backend";
 import { serde } from "@restatedev/restate-sdk-zod";
 import { WorkflowAPIError, WorkflowRunNotFoundError } from "@workflow/errors";
 
@@ -72,7 +72,10 @@ const createStorage = (client: Ingress): Storage => {
         try {
           return await client
             .objectClient<WorkflowApi>({ name: "workflow" }, id)
-            .getRun(params, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
+            .getRun(
+              params ?? {},
+              rpc.opts({ output: serde.zod(WorkflowRunSchema) })
+            );
         } catch (e) {
           throwVercelError(e, id);
         }
@@ -99,9 +102,9 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<PaginatedResponse<WorkflowRun>> {
         try {
           const res = await client
-            .serviceClient<IndexService>({ name: "indexService" })
+            .serviceClient<IndexApi>({ name: "index" })
             .listRun(
-              { params },
+              params ?? {},
               rpc.opts({ output: serde.zod(WorkflowRunSchema.array()) })
             );
 
@@ -123,13 +126,14 @@ const createStorage = (client: Ingress): Storage => {
           return await client
             .objectClient<WorkflowApi>({ name: "workflow" }, id)
             .cancelRun(
-              params,
+              params ?? {},
               rpc.opts({ output: serde.zod(WorkflowRunSchema) })
             );
         } catch (e) {
           throwVercelError(e, id);
         }
       },
+
       pause: async function (
         id: string,
         params?: PauseWorkflowRunParams
@@ -138,13 +142,14 @@ const createStorage = (client: Ingress): Storage => {
           return await client
             .objectClient<WorkflowApi>({ name: "workflow" }, id)
             .pauseRun(
-              params,
+              params ?? {},
               rpc.opts({ output: serde.zod(WorkflowRunSchema) })
             );
         } catch (e) {
           throwVercelError(e, id);
         }
       },
+
       resume: async function (
         id: string,
         params?: ResumeWorkflowRunParams
@@ -153,7 +158,7 @@ const createStorage = (client: Ingress): Storage => {
           return await client
             .objectClient<WorkflowApi>({ name: "workflow" }, id)
             .resumeRun(
-              params,
+              params ?? {},
               rpc.opts({ output: serde.zod(WorkflowRunSchema) })
             );
         } catch (e) {
@@ -161,6 +166,7 @@ const createStorage = (client: Ingress): Storage => {
         }
       },
     },
+
     steps: {
       create: async function (
         runId: string,
@@ -174,6 +180,7 @@ const createStorage = (client: Ingress): Storage => {
           throwVercelError(e, runId);
         }
       },
+
       get: async function (
         runId: string | undefined,
         stepId: string,
@@ -193,6 +200,7 @@ const createStorage = (client: Ingress): Storage => {
           throwVercelError(e, runId);
         }
       },
+
       update: async function (
         runId: string,
         stepId: string,
@@ -209,6 +217,7 @@ const createStorage = (client: Ingress): Storage => {
           throwVercelError(e, runId);
         }
       },
+
       list: async function (
         params: ListWorkflowRunStepsParams
       ): Promise<PaginatedResponse<Step>> {
@@ -230,6 +239,7 @@ const createStorage = (client: Ingress): Storage => {
         }
       },
     },
+
     events: {
       create: async function (
         runId: string,
@@ -268,12 +278,13 @@ const createStorage = (client: Ingress): Storage => {
           throwVercelError(e, params.runId);
         }
       },
+
       listByCorrelationId: async function (
         params: ListEventsByCorrelationIdParams
       ): Promise<PaginatedResponse<Event>> {
         try {
           const res = await client
-            .serviceClient<IndexService>({ name: "indexService" })
+            .serviceClient<IndexApi>({ name: "index" })
             .getEventsByCorrelationId(
               params,
               rpc.opts({ output: serde.zod(EventSchema.array()) })
@@ -289,6 +300,7 @@ const createStorage = (client: Ingress): Storage => {
         }
       },
     },
+
     hooks: {
       create: async function (
         runId: string,
@@ -297,9 +309,9 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<Hook> {
         try {
           return await client
-            .objectClient<HooksApi>({ name: "hooks" }, data.hookId)
-            .create(
-              { ...data, ...params, runId },
+            .objectClient<WorkflowApi>({ name: "workflow" }, runId)
+            .createHook(
+              { ...data, ...params },
               rpc.opts({ output: serde.zod(HookSchema) })
             );
         } catch (e) {
@@ -313,21 +325,31 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<Hook> {
         try {
           return await client
-            .objectClient<HooksApi>({ name: "hooks" }, hookId)
-            .get(params, rpc.opts({ output: serde.zod(HookSchema) }));
+            .serviceClient<IndexApi>({ name: "index" })
+            .getHookById(
+              {
+                ...params,
+                hookId,
+              },
+              rpc.opts({ output: serde.zod(HookSchema) })
+            );
         } catch (e) {
           throwVercelError(e);
         }
       },
+
       getByToken: async function (
         token: string,
         params?: GetHookParams
       ): Promise<Hook> {
         try {
           return await client
-            .serviceClient<IndexService>({ name: "indexService" })
+            .serviceClient<IndexApi>({ name: "index" })
             .getHookByToken(
-              { ...params, token },
+              {
+                ...params,
+                token,
+              },
               rpc.opts({ output: serde.zod(HookSchema) })
             );
         } catch (e) {
@@ -338,11 +360,29 @@ const createStorage = (client: Ingress): Storage => {
       list: async function (
         params: ListHooksParams
       ): Promise<PaginatedResponse<Hook>> {
+        if (!params.runId) {
+          throw new WorkflowAPIError("Unsupported list hooks without runId", {
+            status: 501,
+          });
+        }
         try {
-          // TODO: Implement list hooks in the backend service
-          throw new Error("List hooks not implemented in backend service yet");
+          const res = await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, params.runId)
+            .listHooks(
+              {
+                pagination: params.pagination,
+                resolveData: params.resolveData,
+              },
+              rpc.opts({ output: serde.zod(HookSchema.array()) })
+            );
+
+          return {
+            data: res,
+            hasMore: false,
+            cursor: null,
+          };
         } catch (e) {
-          throwVercelError(e, params.runId);
+          throwVercelError(e);
         }
       },
 
@@ -351,9 +391,27 @@ const createStorage = (client: Ingress): Storage => {
         params?: GetHookParams
       ): Promise<Hook> {
         try {
-          return await client
-            .objectClient<HooksApi>({ name: "hooks" }, hookId)
-            .dispose(rpc.opts({ output: serde.zod(HookSchema) }));
+          const hook = await client
+            .serviceClient<IndexApi>({ name: "index" })
+            .getHookById(
+              {
+                hookId,
+                resolveData: "none",
+              },
+              rpc.opts({ output: serde.zod(HookSchema) })
+            );
+
+          await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, hook.runId)
+            .disposeHook(
+              {
+                hookId: hookId,
+                resolveData: params?.resolveData,
+              },
+              rpc.opts({ output: serde.zod(HookSchema) })
+            );
+
+          return hook;
         } catch (e) {
           throwVercelError(e);
         }

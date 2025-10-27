@@ -16,7 +16,6 @@ import {
   object,
   ObjectContext,
   RestatePromise,
-  rpc,
   service,
   TerminalError,
 } from "@restatedev/restate-sdk";
@@ -36,6 +35,7 @@ import {
   HookSchema,
   ListEventsByCorrelationIdParams,
   type ListEventsParams,
+  ListHooksParams,
   type ListWorkflowRunsParams,
   ListWorkflowRunStepsParams,
   type PauseWorkflowRunParams,
@@ -53,11 +53,10 @@ import {
   filterHookData,
   filterRunData,
   filterStepData,
+  getStateKeysByPrefix,
 } from "./utils.js";
 
-import { JsonTransport } from "@vercel/queue";
 import { serde } from "@restatedev/restate-sdk-zod";
-import { schemas } from "@restatedev/common";
 
 // key by runId
 
@@ -65,11 +64,13 @@ export type State = { run: WorkflowRun; lastEventId: number } & {
   [key in `step_${string}`]: Step;
 } & {
   [key in `evnt_${string}`]: Event;
+} & {
+  [key in `hook_${string}`]: Hook;
 };
 
 export type WorkflowContext = ObjectContext<State>;
 
-export const workflowApi = object({
+export const workflow = object({
   name: "workflow",
   handlers: {
     // runs ------------------------------------------------------------------
@@ -82,7 +83,7 @@ export const workflowApi = object({
         ctx: WorkflowContext,
         data: CreateWorkflowRunRequest
       ): Promise<WorkflowRun> => {
-        const existing = await ctx.get("run");
+        const existing = await ctx.get("run", serde.zod(WorkflowRunSchema));
         if (existing) {
           throw new TerminalError("Workflow run already exists", {
             errorCode: 409,
@@ -110,7 +111,7 @@ export const workflowApi = object({
           updatedAt: now,
         };
 
-        ctx.set("run", result);
+        ctx.set("run", result, serde.zod(WorkflowRunSchema));
 
         return result;
       }
@@ -120,13 +121,12 @@ export const workflowApi = object({
       {
         output: serde.zod(WorkflowRunSchema),
       },
-      async (ctx: WorkflowContext, params?: GetWorkflowRunParams) => {
-        const run = await ctx.get("run");
+      async (ctx: WorkflowContext, params: GetWorkflowRunParams) => {
+        const run = await ctx.get("run", serde.zod(WorkflowRunSchema));
         if (!run) {
           throw new TerminalError("Workflow run not found", { errorCode: 404 });
         }
-        const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-        return filterRunData(run, resolveData);
+        return filterRunData(run, params?.resolveData);
       }
     ),
 
@@ -138,7 +138,7 @@ export const workflowApi = object({
         ctx: WorkflowContext,
         data: UpdateWorkflowRunRequest
       ): Promise<WorkflowRun> => {
-        const run = await ctx.get("run");
+        const run = await ctx.get("run", serde.zod(WorkflowRunSchema));
         if (!run) {
           throw new TerminalError("Workflow run not found", { errorCode: 404 });
         }
@@ -162,7 +162,7 @@ export const workflowApi = object({
           updatedRun.completedAt = now;
         }
 
-        ctx.set("run", updatedRun);
+        ctx.set("run", updatedRun, serde.zod(WorkflowRunSchema));
 
         return updatedRun;
       }
@@ -172,9 +172,9 @@ export const workflowApi = object({
       {
         output: serde.zod(WorkflowRunSchema),
       },
-      async (ctx: WorkflowContext, params?: CancelWorkflowRunParams) => {
+      async (ctx: WorkflowContext, params: CancelWorkflowRunParams) => {
         // Inline updateRun logic for status change
-        const run = await ctx.get("run");
+        const run = await ctx.get("run", serde.zod(WorkflowRunSchema));
         if (!run) {
           throw new TerminalError("Workflow run not found", { errorCode: 404 });
         }
@@ -187,10 +187,9 @@ export const workflowApi = object({
           completedAt: now,
         };
 
-        ctx.set("run", updatedRun);
+        ctx.set("run", updatedRun, serde.zod(WorkflowRunSchema));
 
-        const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-        return filterRunData(updatedRun, resolveData);
+        return filterRunData(updatedRun, params?.resolveData);
       }
     ),
 
@@ -198,9 +197,9 @@ export const workflowApi = object({
       {
         output: serde.zod(WorkflowRunSchema),
       },
-      async (ctx: WorkflowContext, params?: PauseWorkflowRunParams) => {
+      async (ctx: WorkflowContext, params: PauseWorkflowRunParams) => {
         // Inline updateRun logic for status change
-        const run = await ctx.get("run");
+        const run = await ctx.get("run", serde.zod(WorkflowRunSchema));
         if (!run) {
           throw new TerminalError("Workflow run not found", { errorCode: 404 });
         }
@@ -212,10 +211,9 @@ export const workflowApi = object({
           updatedAt: now,
         };
 
-        ctx.set("run", updatedRun);
+        ctx.set("run", updatedRun, serde.zod(WorkflowRunSchema));
 
-        const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-        return filterRunData(updatedRun, resolveData);
+        return filterRunData(updatedRun, params?.resolveData);
       }
     ),
 
@@ -223,9 +221,9 @@ export const workflowApi = object({
       {
         output: serde.zod(WorkflowRunSchema),
       },
-      async (ctx: WorkflowContext, params?: ResumeWorkflowRunParams) => {
+      async (ctx: WorkflowContext, params: ResumeWorkflowRunParams) => {
         // Inline updateRun logic for status change
-        const run = await ctx.get("run");
+        const run = await ctx.get("run", serde.zod(WorkflowRunSchema));
         if (!run) {
           throw new TerminalError("Workflow run not found", { errorCode: 404 });
         }
@@ -242,10 +240,9 @@ export const workflowApi = object({
           updatedRun.startedAt = now;
         }
 
-        ctx.set("run", updatedRun);
+        ctx.set("run", updatedRun, serde.zod(WorkflowRunSchema));
 
-        const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-        return filterRunData(updatedRun, resolveData);
+        return filterRunData(updatedRun, params?.resolveData);
       }
     ),
 
@@ -257,7 +254,7 @@ export const workflowApi = object({
       },
       async (ctx: WorkflowContext, data: CreateStepRequest) => {
         const stepKey = `step_${data.stepId}` as const;
-        const existing = await ctx.get(stepKey);
+        const existing = await ctx.get(stepKey, serde.zod(StepSchema));
         if (existing) {
           throw new TerminalError("Step already exists", {
             errorCode: 409,
@@ -282,7 +279,7 @@ export const workflowApi = object({
           updatedAt: now,
         };
 
-        ctx.set(stepKey, result);
+        ctx.set(stepKey, result, serde.zod(StepSchema));
 
         return result;
       }
@@ -297,12 +294,11 @@ export const workflowApi = object({
         params: { stepId: string } & GetStepParams
       ) => {
         const stepKey = `step_${params.stepId}` as const;
-        const step = await ctx.get(stepKey);
+        const step = await ctx.get(stepKey, serde.zod(StepSchema));
         if (!step) {
           throw new TerminalError("Step not found", { errorCode: 404 });
         }
-        const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-        return filterStepData(step, resolveData);
+        return filterStepData(step, params?.resolveData);
       }
     ),
 
@@ -315,7 +311,7 @@ export const workflowApi = object({
         params: { stepId: string } & UpdateStepRequest
       ) => {
         const stepKey = `step_${params.stepId}` as const;
-        const step = await ctx.get(stepKey);
+        const step = await ctx.get(stepKey, serde.zod(StepSchema));
         if (!step) {
           throw new TerminalError("Step not found", { errorCode: 404 });
         }
@@ -335,7 +331,7 @@ export const workflowApi = object({
           updatedStep.completedAt = now;
         }
 
-        ctx.set(stepKey, updatedStep);
+        ctx.set(stepKey, updatedStep, serde.zod(StepSchema));
 
         return updatedStep;
       }
@@ -346,27 +342,32 @@ export const workflowApi = object({
         output: serde.zod(StepSchema.array()),
       },
       async (ctx: WorkflowContext, params: ListWorkflowRunStepsParams) => {
-        const resolveData = params.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-        const allKeys = (await ctx.stateKeys()) ?? [];
-        const stepKeys = allKeys.filter((key) => key.startsWith("step_"));
+        const stepKeys = await getStateKeysByPrefix(ctx, "step_");
         if (stepKeys.length === 0) {
           return [];
         }
-        const steps = await RestatePromise.all(
-          stepKeys.map(
-            (key) => ctx.get(key as any) as unknown as RestatePromise<Step>
+
+        const orderingSign = params.pagination?.sortOrder === "asc" ? 1 : -1;
+        return (
+          (
+            await RestatePromise.all(
+              stepKeys.map(
+                (key) =>
+                  ctx.get(
+                    key as any,
+                    serde.zod(StepSchema) as any
+                  ) as unknown as RestatePromise<Step>
+              )
+            )
           )
+            // Sort as requested
+            .sort(
+              (a, b) =>
+                (a.createdAt.getTime() - b.createdAt.getTime()) * orderingSign
+            )
+            // Filter data
+            .map((step) => filterStepData(step, params.resolveData))
         );
-
-        if (resolveData === "none") {
-          return steps.map((step) => ({
-            ...step,
-            input: [],
-            output: undefined,
-          }));
-        }
-
-        return steps;
       }
     ),
 
@@ -395,14 +396,13 @@ export const workflowApi = object({
           createdAt: now,
         };
 
-        ctx.set(eventId, result);
+        ctx.set(eventId, result, serde.zod(EventSchema));
 
         if (data.correlationId) {
           ctx.objectSendClient(keyValue, data.correlationId).append(ctx.key);
         }
 
-        const resolveData = data.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-        return filterEventData(result, resolveData);
+        return filterEventData(result, data.resolveData);
       }
     ),
 
@@ -414,66 +414,55 @@ export const workflowApi = object({
         ctx: WorkflowContext,
         params: Omit<ListEventsParams, "runId"> // because it is already part of the key
       ): Promise<Event[]> => {
-        const resolveData = params.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-        const allKeys = (await ctx.stateKeys()) ?? [];
-        const eventKeys = allKeys.filter((key) => key.startsWith("evnt_"));
+        const eventKeys = await getStateKeysByPrefix(ctx, "evnt_");
         if (eventKeys.length === 0) {
           return [];
         }
-        const events = await RestatePromise.all(
-          eventKeys.map(
-            (key) => ctx.get(key as any) as unknown as RestatePromise<Event>
+
+        const orderingSign = params.pagination?.sortOrder === "desc" ? -1 : 1;
+        return (
+          (
+            await RestatePromise.all(
+              eventKeys.map(
+                (key) =>
+                  ctx.get(
+                    key as any,
+                    serde.zod(EventSchema) as any
+                  ) as unknown as RestatePromise<Event>
+              )
+            )
           )
+            // Sort as requested
+            .sort(
+              (a, b) =>
+                (a.createdAt.getTime() - b.createdAt.getTime()) * orderingSign
+            )
+            // Filter data
+            .map((event) => filterEventData(event, params.resolveData))
         );
-
-        const sign = params.pagination?.sortOrder === "desc" ? -1 : 1;
-
-        const sortedEvents = events.sort((a, b) => {
-          const aId = parseInt(a.eventId.substring("evnt_".length));
-          const bId = parseInt(b.eventId.substring("evnt_".length));
-          return (aId - bId) * sign;
-        });
-
-        if (resolveData === "none") {
-          return sortedEvents.map((event) => {
-            const { eventData: _eventData, ...rest } = event as any;
-            return rest;
-          });
-        }
-
-        return sortedEvents;
       }
     ),
-  },
 
-  options: {
-    enableLazyState: true,
-  },
-});
+    // -- Hooks
 
-export type HookContext = ObjectContext<{ hook: Hook }>;
-
-export const hooksApi = object({
-  name: "hooks",
-  handlers: {
-    create: createObjectHandler(
+    createHook: createObjectHandler(
       {
         output: serde.zod(HookSchema),
       },
-      async (ctx: HookContext, data: CreateHookRequest & { runId: string }) => {
-        const existing = await ctx.get("hook");
+      async (ctx: WorkflowContext, data: CreateHookRequest) => {
+        const hookKey = `hook_${data.hookId}` as const;
+        const existing = await ctx.get(hookKey, serde.zod(HookSchema));
         if (existing) {
           throw new TerminalError("Hook already exists", {
             errorCode: 409,
           });
         }
 
-        const hookId = ctx.key;
         const now = new Date();
 
         const result: Hook = {
-          runId: data.runId,
-          hookId,
+          runId: ctx.key,
+          hookId: data.hookId,
           token: data.token,
           metadata: data.metadata,
           ownerId: "restate-owner",
@@ -482,50 +471,103 @@ export const hooksApi = object({
           createdAt: now,
         };
 
-        ctx.set("hook", result);
+        ctx.set(hookKey, result, serde.zod(HookSchema));
 
+        // Build index
+        ctx.objectSendClient(keyValue, data.hookId).append(ctx.key);
         if (data.token) {
-          ctx.objectSendClient(keyValue, data.token).append(hookId);
+          ctx
+            .objectSendClient(keyValue, data.token)
+            .append({ runId: ctx.key, hookId: data.hookId });
         }
 
         return result;
       }
     ),
 
-    get: createObjectHandler(
+    getHook: createObjectHandler(
       {
         output: serde.zod(HookSchema),
       },
-      async (ctx: HookContext, params?: GetHookParams) => {
-        const hook = await ctx.get("hook");
+      async (
+        ctx: WorkflowContext,
+        params: GetHookParams & { hookId: string }
+      ) => {
+        const hook = await ctx.get(
+          `hook_${params.hookId}`,
+          serde.zod(HookSchema)
+        );
         if (!hook) {
           throw new TerminalError("Hook not found", { errorCode: 404 });
         }
-        const resolveData = params?.resolveData ?? DEFAULT_RESOLVE_DATA_OPTION;
-        return filterHookData(hook, resolveData);
+        return filterHookData(hook, params?.resolveData);
       }
     ),
 
-    dispose: createObjectHandler(
+    listHooks: createObjectHandler(
+      {
+        output: serde.zod(HookSchema.array()),
+      },
+      async (
+        ctx: WorkflowContext,
+        params: Omit<ListHooksParams, "runId"> // because it is already part of the key
+      ): Promise<Hook[]> => {
+        const hookKeys = await getStateKeysByPrefix(ctx, "hook_");
+        if (hookKeys.length === 0) {
+          return [];
+        }
+
+        const orderingSign = params.pagination?.sortOrder === "asc" ? -1 : 1;
+        return (
+          (
+            await RestatePromise.all(
+              hookKeys.map(
+                (key) =>
+                  ctx.get(
+                    key as any,
+                    serde.zod(HookSchema) as any
+                  ) as unknown as RestatePromise<Hook>
+              )
+            )
+          )
+            // Sort as requested
+            .sort(
+              (a, b) =>
+                (a.createdAt.getTime() - b.createdAt.getTime()) * orderingSign
+            )
+            // Filter data
+            .map((hook) => filterHookData(hook, params.resolveData))
+        );
+      }
+    ),
+
+    disposeHook: createObjectHandler(
       {
         output: serde.zod(HookSchema),
       },
-      async (ctx: HookContext) => {
-        const hook = await ctx.get("hook");
+      async (
+        ctx: WorkflowContext,
+        params: { hookId: string } & GetHookParams
+      ) => {
+        const hookKey = `hook_${params.hookId}` as const;
+        const hook = await ctx.get(hookKey, serde.zod(HookSchema));
         if (!hook) {
           throw new TerminalError("Hook not found", { errorCode: 404 });
         }
 
-        ctx.clear("hook");
+        ctx.clear(hookKey);
 
+        // Clear index
+        ctx.objectSendClient(keyValue, hook.hookId).clear();
         if (hook.token) {
           ctx.objectSendClient(keyValue, hook.token).clear();
         }
 
-        return hook;
+        return filterHookData(hook, params.resolveData);
       }
     ),
   },
+
   options: {
     enableLazyState: true,
   },
@@ -554,8 +596,8 @@ export const keyValue = object({
   },
 });
 
-export const indexService = service({
-  name: "indexService",
+export const index = service({
+  name: "index",
   handlers: {
     getEventsByCorrelationId: createServiceHandler(
       {
@@ -572,7 +614,7 @@ export const indexService = service({
         const matchingEvents: Event[] = [];
         for (const runId of runIds || []) {
           const events = await ctx
-            .objectClient(workflowApi, runId)
+            .objectClient(workflow, runId)
             .listEvents({ resolveData: param.resolveData });
 
           matchingEvents.push(
@@ -585,19 +627,49 @@ export const indexService = service({
       }
     ),
 
+    getHookById: createServiceHandler(
+      {
+        output: serde.zod(HookSchema),
+      },
+      async (
+        ctx: Context,
+        param: { hookId: string } & GetHookParams
+      ): Promise<Hook> => {
+        const runId = (await ctx
+          .objectClient(keyValue, param.hookId)
+          .get()) as string[];
+
+        if (runId === undefined || runId.length === 0) {
+          throw new TerminalError("No hooks found", { errorCode: 404 });
+        }
+        return await ctx.objectClient(workflow, runId[0]!).getHook({
+          hookId: param.hookId,
+          resolveData: param.resolveData,
+        });
+      }
+    ),
+
     getHookByToken: createServiceHandler(
       {
         output: serde.zod(HookSchema),
       },
-      async (ctx: Context, param: { token: string }): Promise<Hook> => {
-        const hookTokens = (await ctx
+      async (
+        ctx: Context,
+        param: { token: string } & GetHookParams
+      ): Promise<Hook> => {
+        const runIdAndHookId = (await ctx
           .objectClient(keyValue, param.token)
-          .get()) as string[];
+          .get()) as { runId: string; hookId: string }[];
 
-        if (hookTokens === undefined || hookTokens.length === 0) {
+        if (runIdAndHookId === undefined || runIdAndHookId.length === 0) {
           throw new TerminalError("No hooks found", { errorCode: 404 });
         }
-        return await ctx.objectClient(hooksApi, hookTokens[0]!).get({});
+        return await ctx
+          .objectClient(workflow, runIdAndHookId[0]!.runId)
+          .getHook({
+            hookId: runIdAndHookId[0]!.hookId,
+            resolveData: param.resolveData,
+          });
       }
     ),
 
@@ -605,85 +677,25 @@ export const indexService = service({
       {
         output: serde.zod(WorkflowRunSchema.array()),
       },
-      async (ctx: Context, arg: { params?: ListWorkflowRunsParams }) => {
+      async (ctx: Context, params: ListWorkflowRunsParams) => {
+        throw new TerminalError("Unimplemented yet", { errorCode: 501 });
+      }
+    ),
+
+    listHooks: createServiceHandler(
+      {
+        output: serde.zod(WorkflowRunSchema.array()),
+      },
+      async (ctx: Context, params: ListWorkflowRunsParams) => {
         throw new TerminalError("Unimplemented yet", { errorCode: 501 });
       }
     ),
   },
-});
-
-const transport = new JsonTransport();
-
-export const queue = service({
-  name: "queueService",
-  handlers: {
-    queue: createServiceHandler(
-      {
-        retryPolicy: {
-          maxAttempts: 10,
-          maxInterval: { seconds: 6 },
-          onMaxAttempts: "kill",
-        },
-
-        input: serde.zod(schemas.QueueParamsSchema),
-      },
-      async (ctx: Context, params) => {
-        let pathname: string;
-        if (params.queueName.startsWith("__wkf_step_")) {
-          pathname = `step`;
-        } else if (params.queueName.startsWith("__wkf_workflow_")) {
-          pathname = `flow`;
-        } else {
-          throw new Error("Unknown queue name prefix");
-        }
-
-        const messageId = ctx.request().id;
-
-        const body = transport.serialize(params.message);
-
-        const response = await fetch(
-          `${params.deliverTo}/.well-known/workflow/v1/${pathname}`,
-          {
-            method: "POST",
-            body: body as BodyInit,
-            headers: {
-              "x-vqs-queue-name": params.queueName,
-              "x-vqs-message-id": messageId,
-              "x-vqs-message-attempt": String(params.attempt),
-            },
-          }
-        );
-
-        if (response.ok) {
-          return { status: "delivered" };
-        }
-        if (response.status === 503) {
-          const { retryIn } = (await response.json()) as { retryIn: number };
-
-          // Increment attempt count
-          params.attempt += 1;
-
-          ctx.serviceSendClient(queue).queue(
-            params,
-            rpc.sendOpts({
-              delay: { seconds: retryIn },
-              input: serde.zod(schemas.QueueParamsSchema),
-            })
-          );
-
-          return { status: "delayed", retryIn };
-        }
-
-        const text = await response.text();
-        throw new Error(
-          `Queue delivery failed with status ${response.status}:\n${text}`
-        );
-      }
-    ),
+  options: {
+    // No need to have journal retention for this service, as it just performs reads
+    journalRetention: { milliseconds: 0 },
   },
 });
 
-export type IndexService = typeof indexService;
-export type WorkflowApi = typeof workflowApi;
-export type HooksApi = typeof hooksApi;
-export type QueueService = typeof queue;
+export type IndexApi = typeof index;
+export type WorkflowApi = typeof workflow;
