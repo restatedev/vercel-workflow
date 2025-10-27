@@ -6,8 +6,6 @@ import {
 } from "@restatedev/restate-sdk";
 import { JsonTransport } from "@vercel/queue";
 
-export const DEFAULT_RESOLVE_DATA_OPTION = "all";
-
 // Helper functions to filter data based on resolveData setting
 export function filterRunData(
   run: WorkflowRun,

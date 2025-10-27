@@ -361,9 +361,23 @@ const createStorage = (client: Ingress): Storage => {
         params: ListHooksParams
       ): Promise<PaginatedResponse<Hook>> {
         if (!params.runId) {
-          throw new WorkflowAPIError("Unsupported list hooks without runId", {
-            status: 501,
-          });
+          try {
+            return {
+              data: await client
+                .serviceClient<IndexApi>({ name: "index" })
+                .listHooks(
+                  {
+                    pagination: params.pagination,
+                    resolveData: params.resolveData,
+                  },
+                  rpc.opts({ output: serde.zod(HookSchema.array()) })
+                ),
+              hasMore: false,
+              cursor: null,
+            };
+          } catch (e) {
+            throwVercelError(e);
+          }
         }
         try {
           const res = await client

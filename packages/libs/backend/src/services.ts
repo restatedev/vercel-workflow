@@ -49,7 +49,6 @@ import {
   WorkflowRunSchema,
 } from "@workflow/world";
 import {
-  DEFAULT_RESOLVE_DATA_OPTION,
   filterEventData,
   filterHookData,
   filterRunData,
@@ -412,7 +411,10 @@ export const workflow = object({
           ctx.objectSendClient(keyValue, data.correlationId).append(ctx.key);
         }
 
-        return filterEventData(result, data.resolveData);
+        return filterEventData(
+          result,
+          /* There is an issue with zod schemas here, if none is used then the schema won't allow to parse the output here because eventData is not optional! */ "all"
+        );
       }
     ),
 
@@ -450,7 +452,12 @@ export const workflow = object({
                 (a.createdAt.getTime() - b.createdAt.getTime()) * orderingSign
             )
             // Filter data
-            .map((event) => filterEventData(event, params.resolveData))
+            .map((event) =>
+              filterEventData(
+                event,
+                /* There is an issue with zod schemas here, if none is used then the schema won't allow to parse the output here because eventData is not optional! */ "all"
+              )
+            )
         );
       }
     ),
@@ -635,7 +642,10 @@ export const index = service({
         for (const runId of runIds || []) {
           const events = await ctx
             .objectClient(workflow, runId)
-            .listEvents({ resolveData: param.resolveData }, rpc.opts({output: serde.zod(EventSchema.array())}));
+            .listEvents(
+              { resolveData: param.resolveData },
+              rpc.opts({ output: serde.zod(EventSchema.array()) })
+            );
 
           matchingEvents.push(
             ...events.filter(
@@ -662,10 +672,13 @@ export const index = service({
         if (runId === undefined || runId.length === 0) {
           throw new TerminalError("No hooks found", { errorCode: 404 });
         }
-        return await ctx.objectClient(workflow, runId[0]!).getHook({
-          hookId: param.hookId,
-          resolveData: param.resolveData,
-        }, rpc.opts({output: serde.zod(HookSchema)}));
+        return await ctx.objectClient(workflow, runId[0]!).getHook(
+          {
+            hookId: param.hookId,
+            resolveData: param.resolveData,
+          },
+          rpc.opts({ output: serde.zod(HookSchema) })
+        );
       }
     ),
 
@@ -686,10 +699,13 @@ export const index = service({
         }
         return await ctx
           .objectClient(workflow, runIdAndHookId[0]!.runId)
-          .getHook({
-            hookId: runIdAndHookId[0]!.hookId,
-            resolveData: param.resolveData,
-          }, rpc.opts({output: serde.zod(HookSchema)}));
+          .getHook(
+            {
+              hookId: runIdAndHookId[0]!.hookId,
+              resolveData: param.resolveData,
+            },
+            rpc.opts({ output: serde.zod(HookSchema) })
+          );
       }
     ),
 
@@ -710,9 +726,12 @@ export const index = service({
           (
             await RestatePromise.all(
               runIds.map((runId) =>
-                ctx.objectClient(workflow, runId).getRun({
-                  resolveData: params.resolveData,
-                }, rpc.opts({output: serde.zod(WorkflowRunSchema)}))
+                ctx.objectClient(workflow, runId).getRun(
+                  {
+                    resolveData: params.resolveData,
+                  },
+                  rpc.opts({ output: serde.zod(WorkflowRunSchema) })
+                )
               )
             )
           )
@@ -725,6 +744,43 @@ export const index = service({
                 ? run.workflowName === params.workflowName
                 : true
             )
+            // Sort as requested
+            .sort(
+              (a, b) =>
+                (a.createdAt.getTime() - b.createdAt.getTime()) * orderingSign
+            )
+        );
+      }
+    ),
+
+    listHooks: createServiceHandler(
+      {
+        output: serde.zod(HookSchema.array()),
+      },
+      async (
+        ctx: Context,
+        params: Omit<ListHooksParams, "runId"> // This API is for the aggregated search of hooks
+      ): Promise<Hook[]> => {
+        const runIds = (await ctx
+          .objectClient(keyValue, "workflows")
+          .get()) as string[];
+
+        const orderingSign = params.pagination?.sortOrder === "desc" ? -1 : 1;
+        return (
+          (
+            await RestatePromise.all(
+              runIds.map((runId) =>
+                ctx.objectClient(workflow, runId).listHooks(
+                  {
+                    resolveData: params.resolveData,
+                    pagination: params.pagination,
+                  },
+                  rpc.opts({ output: serde.zod(HookSchema.array()) })
+                )
+              )
+            )
+          )
+            .flatMap((l) => l)
             // Sort as requested
             .sort(
               (a, b) =>
