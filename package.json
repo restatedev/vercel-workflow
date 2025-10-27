@@ -6,6 +6,7 @@
     "preinstall": "npx only-allow pnpm",
     "clean": "turbo run clean && rm -rf .turbo",
     "clean:cache": "turbo daemon stop; sleep 1; rm -rf .turbo node_modules/.cache",
+    "backend:run": "pnpm --filter ./packages/libs/backend start",
     "build": "turbo run _build --filter=\"./packages/libs/*\"",
     "build:all": "turbo run _build",
     "dev": "pnpm --filter \"./packages/libs/*\" --parallel dev",
