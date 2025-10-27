@@ -52,6 +52,7 @@
     "@restatedev/common": "workspace:*",
     "@restatedev/restate-sdk": "catalog:",
     "@restatedev/restate-sdk-zod": "catalog:",
+    "@restatedev/pubsub": "catalog:",
     "@vercel/queue": "catalog:",
     "@workflow/world": "catalog:"
   }

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await */
-import { createWebhook, sleep } from "workflow";
+import { createWebhook, getWritable, sleep } from "workflow";
 import { FatalError } from "workflow";
 
 export async function handleUserSignup(email: string) {
@@ -7,14 +7,38 @@ export async function handleUserSignup(email: string) {
 
   const user = await createUser(email);
 
+  const writable = getWritable<string>();
+
+  await writeToStream(writable, "starting");
+
   await sendWelcomeEmail(user);
+  await writeToStream(writable, "gonna sleep");
   await sleep("30s");
+  await writeToStream(writable, "slept");
   const webhook = createWebhook();
   await sendOnboardingEmail(user, webhook.url);
+  await writeToStream(writable, "sent onboarding mail");
 
   await webhook;
+  await writeToStream(writable, "done!");
+
+  await closeStream(writable);
 
   return { userId: user.id, status: "onboarded" };
+}
+
+async function writeToStream(stream: WritableStream<string>, content: string) {
+  "use step";
+
+  const writer = stream.getWriter();
+  await writer.write(content);
+}
+
+async function closeStream(stream: WritableStream<string>) {
+  "use step";
+
+  const writer = stream.getWriter();
+  await writer.close();
 }
 
 async function createUser(email: string) {

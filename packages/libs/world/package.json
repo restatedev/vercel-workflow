@@ -53,6 +53,7 @@
     "@workflow/errors": "catalog:",
     "@restatedev/restate-sdk-clients": "catalog:",
     "@restatedev/restate-sdk-zod": "catalog:",
+    "@restatedev/pubsub-client": "catalog:",
     "@vercel/queue": "catalog:",
     "workflow": "catalog:",
     "zod": "catalog:"
