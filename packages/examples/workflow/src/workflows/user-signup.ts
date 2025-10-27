@@ -12,6 +12,8 @@ export async function handleUserSignup(email: string) {
   const webhook = createWebhook();
   await sendOnboardingEmail(user, webhook.url);
 
+  await webhook;
+
   return { userId: user.id, status: "onboarded" };
 }
 

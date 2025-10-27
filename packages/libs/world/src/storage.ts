@@ -1,4 +1,4 @@
-import { Ingress, rpc } from "@restatedev/restate-sdk-clients";
+import { Ingress, rpc, HttpCallError } from "@restatedev/restate-sdk-clients";
 
 import {
   type CancelWorkflowRunParams,
@@ -33,6 +33,17 @@ import {
 
 import type { HooksApi, IndexService, WorkflowApi } from "@restatedev/backend";
 import { serde } from "@restatedev/restate-sdk-zod";
+import { WorkflowAPIError, WorkflowRunNotFoundError } from "@workflow/errors";
+
+function throwVercelError(e: any, runId?: string): never {
+  if (e instanceof HttpCallError) {
+    if (runId && e.status == 404) {
+      throw new WorkflowRunNotFoundError(runId);
+    }
+    throw new WorkflowAPIError(e.message, { status: e.status, cause: e.cause });
+  }
+  throw e;
+}
 
 const createStorage = (client: Ingress): Storage => {
   return {
@@ -42,83 +53,112 @@ const createStorage = (client: Ingress): Storage => {
       ): Promise<WorkflowRun> {
         const runId = `wfrun_${Math.random().toString(36).substring(2, 16)}`;
 
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .createRun(data, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
-
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, runId)
+            .createRun(
+              data,
+              rpc.opts({ output: serde.zod(WorkflowRunSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e);
+        }
       },
 
       get: async function (
         id: string,
         params?: GetWorkflowRunParams
       ): Promise<WorkflowRun> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .getRun(params, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, id)
+            .getRun(params, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
+        } catch (e) {
+          throwVercelError(e, id);
+        }
       },
 
       update: async function (
         id: string,
         data: UpdateWorkflowRunRequest
       ): Promise<WorkflowRun> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .updateRun(data, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
-
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, id)
+            .updateRun(
+              data,
+              rpc.opts({ output: serde.zod(WorkflowRunSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e, id);
+        }
       },
 
       list: async function (
         params?: ListWorkflowRunsParams
       ): Promise<PaginatedResponse<WorkflowRun>> {
-        const res = await client
-          .serviceClient<IndexService>({ name: "indexService" })
-          .listRun(
-            { params },
-            rpc.opts({ output: serde.zod(WorkflowRunSchema.array()) })
-          );
+        try {
+          const res = await client
+            .serviceClient<IndexService>({ name: "indexService" })
+            .listRun(
+              { params },
+              rpc.opts({ output: serde.zod(WorkflowRunSchema.array()) })
+            );
 
-        return {
-          data: res,
-          hasMore: false,
-          cursor: null,
-        };
+          return {
+            data: res,
+            hasMore: false,
+            cursor: null,
+          };
+        } catch (e) {
+          throwVercelError(e);
+        }
       },
 
       cancel: async function (
         id: string,
         params?: CancelWorkflowRunParams
       ): Promise<WorkflowRun> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .cancelRun(
-            params,
-            rpc.opts({ output: serde.zod(WorkflowRunSchema) })
-          );
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, id)
+            .cancelRun(
+              params,
+              rpc.opts({ output: serde.zod(WorkflowRunSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e, id);
+        }
       },
       pause: async function (
         id: string,
         params?: PauseWorkflowRunParams
       ): Promise<WorkflowRun> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .pauseRun(params, rpc.opts({ output: serde.zod(WorkflowRunSchema) }));
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, id)
+            .pauseRun(
+              params,
+              rpc.opts({ output: serde.zod(WorkflowRunSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e, id);
+        }
       },
       resume: async function (
         id: string,
         params?: ResumeWorkflowRunParams
       ): Promise<WorkflowRun> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, id)
-          .resumeRun(
-            params,
-            rpc.opts({ output: serde.zod(WorkflowRunSchema) })
-          );
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, id)
+            .resumeRun(
+              params,
+              rpc.opts({ output: serde.zod(WorkflowRunSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e, id);
+        }
       },
     },
     steps: {
@@ -126,10 +166,13 @@ const createStorage = (client: Ingress): Storage => {
         runId: string,
         data: CreateStepRequest
       ): Promise<Step> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .createStep(data, rpc.opts({ output: serde.zod(StepSchema) }));
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, runId)
+            .createStep(data, rpc.opts({ output: serde.zod(StepSchema) }));
+        } catch (e) {
+          throwVercelError(e, runId);
+        }
       },
       get: async function (
         runId: string | undefined,
@@ -139,42 +182,52 @@ const createStorage = (client: Ingress): Storage => {
         if (!runId) {
           throw new Error("runId is required");
         }
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .getStep(
-            { stepId, ...params },
-            rpc.opts({ output: serde.zod(StepSchema) })
-          );
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, runId)
+            .getStep(
+              { stepId, ...params },
+              rpc.opts({ output: serde.zod(StepSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e, runId);
+        }
       },
       update: async function (
         runId: string,
         stepId: string,
         data: UpdateStepRequest
       ): Promise<Step> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .updateStep(
-            { stepId, ...data },
-            rpc.opts({ output: serde.zod(StepSchema) })
-          );
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, runId)
+            .updateStep(
+              { stepId, ...data },
+              rpc.opts({ output: serde.zod(StepSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e, runId);
+        }
       },
       list: async function (
         params: ListWorkflowRunStepsParams
       ): Promise<PaginatedResponse<Step>> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, params.runId)
-          .listSteps(
-            params,
-            rpc.opts({ output: serde.zod(StepSchema.array()) })
-          );
+        try {
+          const res = await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, params.runId)
+            .listSteps(
+              params,
+              rpc.opts({ output: serde.zod(StepSchema.array()) })
+            );
 
-        return {
-          data: res,
-          hasMore: false,
-          cursor: null,
-        };
+          return {
+            data: res,
+            hasMore: false,
+            cursor: null,
+          };
+        } catch (e) {
+          throwVercelError(e);
+        }
       },
     },
     events: {
@@ -183,46 +236,57 @@ const createStorage = (client: Ingress): Storage => {
         data: CreateEventRequest,
         params?: CreateEventParams
       ): Promise<Event> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, runId)
-          .createEvent(
-            { ...data, ...params },
-            rpc.opts({ output: serde.zod(EventSchema) })
-          );
-        return res;
+        try {
+          return await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, runId)
+            .createEvent(
+              { ...data, ...params },
+              rpc.opts({ output: serde.zod(EventSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e, runId);
+        }
       },
 
       list: async function (
         params: ListEventsParams
       ): Promise<PaginatedResponse<Event>> {
-        const res = await client
-          .objectClient<WorkflowApi>({ name: "workflow" }, params.runId)
-          .listEvents(
-            params,
-            rpc.opts({ output: serde.zod(EventSchema.array()) })
-          );
+        try {
+          const res = await client
+            .objectClient<WorkflowApi>({ name: "workflow" }, params.runId)
+            .listEvents(
+              params,
+              rpc.opts({ output: serde.zod(EventSchema.array()) })
+            );
 
-        return {
-          data: res,
-          hasMore: false,
-          cursor: null,
-        };
+          return {
+            data: res,
+            hasMore: false,
+            cursor: null,
+          };
+        } catch (e) {
+          throwVercelError(e, params.runId);
+        }
       },
       listByCorrelationId: async function (
         params: ListEventsByCorrelationIdParams
       ): Promise<PaginatedResponse<Event>> {
-        const res = await client
-          .serviceClient<IndexService>({ name: "indexService" })
-          .getEventsByCorrelationId(
-            params,
-            rpc.opts({ output: serde.zod(EventSchema.array()) })
-          );
+        try {
+          const res = await client
+            .serviceClient<IndexService>({ name: "indexService" })
+            .getEventsByCorrelationId(
+              params,
+              rpc.opts({ output: serde.zod(EventSchema.array()) })
+            );
 
-        return {
-          data: res,
-          hasMore: false,
-          cursor: null,
-        };
+          return {
+            data: res,
+            hasMore: false,
+            cursor: null,
+          };
+        } catch (e) {
+          throwVercelError(e);
+        }
       },
     },
     hooks: {
@@ -231,51 +295,68 @@ const createStorage = (client: Ingress): Storage => {
         data: CreateHookRequest,
         params?: GetHookParams
       ): Promise<Hook> {
-        const res = await client
-          .objectClient<HooksApi>({ name: "hooks" }, data.hookId)
-          .create(
-            { ...data, ...params, runId },
-            rpc.opts({ output: serde.zod(HookSchema) })
-          );
-
-        return res;
+        try {
+          return await client
+            .objectClient<HooksApi>({ name: "hooks" }, data.hookId)
+            .create(
+              { ...data, ...params, runId },
+              rpc.opts({ output: serde.zod(HookSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e, runId);
+        }
       },
 
       get: async function (
         hookId: string,
         params?: GetHookParams
       ): Promise<Hook> {
-        return await client
-          .objectClient<HooksApi>({ name: "hooks" }, hookId)
-          .get(params, rpc.opts({ output: serde.zod(HookSchema) }));
+        try {
+          return await client
+            .objectClient<HooksApi>({ name: "hooks" }, hookId)
+            .get(params, rpc.opts({ output: serde.zod(HookSchema) }));
+        } catch (e) {
+          throwVercelError(e);
+        }
       },
       getByToken: async function (
         token: string,
         params?: GetHookParams
       ): Promise<Hook> {
-        return await client
-          .serviceClient<IndexService>({ name: "indexService" })
-          .getHookByToken(
-            { ...params, token },
-            rpc.opts({ output: serde.zod(HookSchema) })
-          );
+        try {
+          return await client
+            .serviceClient<IndexService>({ name: "indexService" })
+            .getHookByToken(
+              { ...params, token },
+              rpc.opts({ output: serde.zod(HookSchema) })
+            );
+        } catch (e) {
+          throwVercelError(e);
+        }
       },
 
       list: async function (
         params: ListHooksParams
       ): Promise<PaginatedResponse<Hook>> {
-        // TODO: Implement list hooks in the backend service
-        throw new Error("List hooks not implemented in backend service yet");
+        try {
+          // TODO: Implement list hooks in the backend service
+          throw new Error("List hooks not implemented in backend service yet");
+        } catch (e) {
+          throwVercelError(e, params.runId);
+        }
       },
 
       dispose: async function (
         hookId: string,
         params?: GetHookParams
       ): Promise<Hook> {
-        const res = await client
-          .objectClient<HooksApi>({ name: "hooks" }, hookId)
-          .dispose(rpc.opts({ output: serde.zod(HookSchema) }));
-        return res;
+        try {
+          return await client
+            .objectClient<HooksApi>({ name: "hooks" }, hookId)
+            .dispose(rpc.opts({ output: serde.zod(HookSchema) }));
+        } catch (e) {
+          throwVercelError(e);
+        }
       },
     },
   };

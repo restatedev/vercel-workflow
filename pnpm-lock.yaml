@@ -12,9 +12,6 @@ catalogs:
     '@restatedev/restate-sdk-clients':
       specifier: 1.9.1
       version: 1.9.1
-    '@restatedev/restate-sdk-core':
-      specifier: 1.9.1
-      version: 1.9.1
     '@restatedev/restate-sdk-zod':
       specifier: 1.9.1
       version: 1.9.1
@@ -24,6 +21,9 @@ catalogs:
     '@vercel/queue':
       specifier: 0.0.0-alpha.23
       version: 0.0.0-alpha.23
+    '@workflow/errors':
+      specifier: ^4.0.1-beta.1
+      version: 4.0.1-beta.1
     '@workflow/world':
       specifier: ^4.0.1-beta.2
       version: 4.0.1-beta.2
@@ -132,9 +132,6 @@ importers:
 
   packages/libs/common:
     dependencies:
-      '@restatedev/restate-sdk-core':
-        specifier: 'catalog:'
-        version: 1.9.1
       '@workflow/world':
         specifier: 'catalog:'
         version: 4.0.1-beta.2(zod@4.1.12)
@@ -156,6 +153,9 @@ importers:
       '@vercel/queue':
         specifier: 'catalog:'
         version: 0.0.0-alpha.23
+      '@workflow/errors':
+        specifier: 'catalog:'
+        version: 4.0.1-beta.1
       '@workflow/world':
         specifier: 'catalog:'
         version: 4.0.1-beta.2(zod@4.1.12)

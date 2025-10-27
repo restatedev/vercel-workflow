@@ -50,6 +50,7 @@
   "dependencies": {
     "@restatedev/common": "workspace:*",
     "@workflow/world": "catalog:",
+    "@workflow/errors": "catalog:",
     "@restatedev/restate-sdk-clients": "catalog:",
     "@restatedev/restate-sdk-zod": "catalog:",
     "@vercel/queue": "catalog:",
