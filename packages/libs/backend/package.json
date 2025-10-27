@@ -22,6 +22,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./types": {
+      "import": "./dist/types.js",
+      "require": "./dist/types.cjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -37,7 +41,7 @@
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc --noEmit && tsdown",
     "dev": "tsc --noEmit --watch",
-    "start": "node ./dist/index.js",
+    "start": "node ./dist/server.js",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
@@ -45,7 +49,7 @@
     "check:exports": "turbo run _check:exports --filter={.}...",
     "_check:exports": "attw --pack .",
     "check:api": "turbo run _check:api --filter={.}...",
-    "_check:api": "api-extractor run --local",
+    "_check:api": "api-extractor run --local && api-extractor run --local --config api-extractor.types.json",
     "prepublishOnly": "pnpm -w verify"
   },
   "dependencies": {
@@ -55,5 +59,12 @@
     "@restatedev/pubsub": "catalog:",
     "@vercel/queue": "catalog:",
     "@workflow/world": "catalog:"
+  },
+  "typesVersions": {
+    "*": {
+      "types": [
+        "./dist/types.d.ts"
+      ]
+    }
   }
 }

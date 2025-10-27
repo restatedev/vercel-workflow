@@ -3,7 +3,7 @@ import { JsonTransport } from "@vercel/queue";
 import z from "zod/v4";
 import { Ingress, rpc } from "@restatedev/restate-sdk-clients";
 import { serde } from "@restatedev/restate-sdk-zod";
-import { QueueService } from "@restatedev/backend";
+import { QueueService } from "@restatedev/backend/types";
 import { schemas } from "@restatedev/common";
 
 const HeaderParser = z.object({
@@ -75,6 +75,7 @@ export function createQueue(client: Ingress, deliverTo: string): Queue {
     };
   };
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   const getDeploymentId: Queue["getDeploymentId"] = async () => {
     return "dpl_restate";
   };

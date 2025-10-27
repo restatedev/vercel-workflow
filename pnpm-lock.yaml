@@ -7,11 +7,11 @@ settings:
 catalogs:
   default:
     '@restatedev/pubsub':
-      specifier: 0.3.0
-      version: 0.3.0
+      specifier: 0.3.1
+      version: 0.3.1
     '@restatedev/pubsub-client':
-      specifier: 0.3.0
-      version: 0.3.0
+      specifier: 0.3.1
+      version: 0.3.1
     '@restatedev/restate-sdk':
       specifier: 1.9.1
       version: 1.9.1
@@ -125,7 +125,7 @@ importers:
         version: link:../common
       '@restatedev/pubsub':
         specifier: 'catalog:'
-        version: 0.3.0(@restatedev/restate-sdk-zod@1.9.1)(@restatedev/restate-sdk@1.9.1)
+        version: 0.3.1(@restatedev/restate-sdk-zod@1.9.1(zod@4.1.12))(@restatedev/restate-sdk@1.9.1)(zod@4.1.12)
       '@restatedev/restate-sdk':
         specifier: 'catalog:'
         version: 1.9.1
@@ -150,12 +150,15 @@ importers:
 
   packages/libs/world:
     dependencies:
+      '@restatedev/backend':
+        specifier: workspace:*
+        version: link:../backend
       '@restatedev/common':
         specifier: workspace:*
         version: link:../common
       '@restatedev/pubsub-client':
         specifier: 'catalog:'
-        version: 0.3.0(@restatedev/restate-sdk-clients@1.9.1)
+        version: 0.3.1(@restatedev/restate-sdk-clients@1.9.1)
       '@restatedev/restate-sdk-clients':
         specifier: 'catalog:'
         version: 1.9.1
@@ -961,17 +964,17 @@ packages:
   '@quansync/fs@0.1.5':
     resolution: {integrity: sha512-lNS9hL2aS2NZgNW7BBj+6EBl4rOf8l+tQ0eRY6JWCI8jI2kc53gSoqbjojU0OnAWhzoXiOjFyGsHcDGePB3lhA==}
 
-  '@restatedev/pubsub-client@0.3.0':
-    resolution: {integrity: sha512-xeXPkNp5D7OAx3hHt+U5llNkmEET3rXbKRIAbb2K00CROljOjO4AEKjq02lxpupFvYBSnttGoB085mvWHPlA6g==}
+  '@restatedev/pubsub-client@0.3.1':
+    resolution: {integrity: sha512-mVjgZRO3zKgUm53YuJT+1Bz2jO812eCTiEPzhRLouqcN+yA97ac/Nx4vZrCoW3qRj2f5eKkBCjR12tSeCqGGPQ==}
     peerDependencies:
       '@restatedev/restate-sdk-clients': ^1.9.1
 
-  '@restatedev/pubsub@0.3.0':
-    resolution: {integrity: sha512-XsKA0CnBPPvBtil83R5FpLlQ5eIpuyzntmfK2FOtfwduozJBer/dk5xuz8BsraGEw0quYNAuWxuMVfhbw4sp3Q==}
+  '@restatedev/pubsub@0.3.1':
+    resolution: {integrity: sha512-2Otwd2uvJvWaMSxgjAOaQir+XyEJCJgM67SQqk1rrqJMYSqwqPUQ/hcVU15gsZ0ofI9aOnB2mbbKXmOCB9l7lw==}
     peerDependencies:
       '@restatedev/restate-sdk': ^1.9.1
       '@restatedev/restate-sdk-zod': ^1.9.1
-      zod: ^4.1.12
+      zod: ^4.0.0
 
   '@restatedev/restate-sdk-clients@1.9.1':
     resolution: {integrity: sha512-dOZVBDVvjK8SwgTPwMM5UYYXTU+8BHk4D9QTtDUYca/lOgVAIHoQEPy5e50UJ+/cCo6NouD9lmIC+6qKbN3dsA==}
@@ -4657,14 +4660,15 @@ snapshots:
     dependencies:
       quansync: 0.2.11
 
-  '@restatedev/pubsub-client@0.3.0(@restatedev/restate-sdk-clients@1.9.1)':
+  '@restatedev/pubsub-client@0.3.1(@restatedev/restate-sdk-clients@1.9.1)':
     dependencies:
       '@restatedev/restate-sdk-clients': 1.9.1
 
-  '@restatedev/pubsub@0.3.0(@restatedev/restate-sdk-zod@1.9.1)(@restatedev/restate-sdk@1.9.1)':
+  '@restatedev/pubsub@0.3.1(@restatedev/restate-sdk-zod@1.9.1(zod@4.1.12))(@restatedev/restate-sdk@1.9.1)(zod@4.1.12)':
     dependencies:
       '@restatedev/restate-sdk': 1.9.1
       '@restatedev/restate-sdk-zod': 1.9.1(zod@4.1.12)
+      zod: 4.1.12
 
   '@restatedev/restate-sdk-clients@1.9.1':
     dependencies:

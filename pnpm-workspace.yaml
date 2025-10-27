@@ -19,8 +19,8 @@ catalog:
   "@workflow/errors": ^4.0.1-beta.1
 
   # Restate Pub/Sub
-  "@restatedev/pubsub": "0.3.0"
-  "@restatedev/pubsub-client": "0.3.0"
+  "@restatedev/pubsub": "0.3.1"
+  "@restatedev/pubsub-client": "0.3.1"
 
   # Vercel
   "@vercel/queue": 0.0.0-alpha.23

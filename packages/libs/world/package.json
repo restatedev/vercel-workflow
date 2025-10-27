@@ -49,6 +49,7 @@
   },
   "dependencies": {
     "@restatedev/common": "workspace:*",
+    "@restatedev/backend": "workspace:*",
     "@workflow/world": "catalog:",
     "@workflow/errors": "catalog:",
     "@restatedev/restate-sdk-clients": "catalog:",
