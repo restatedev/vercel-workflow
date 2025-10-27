@@ -45,7 +45,7 @@
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc --noEmit && tsdown",
     "dev": "tsc --noEmit --watch",
-    "start": "node ./dist/server.js",
+    "start": "node ./dist/serve.js",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
