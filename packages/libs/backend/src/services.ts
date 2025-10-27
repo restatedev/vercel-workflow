@@ -23,40 +23,41 @@ import {
 
 import {
   type CancelWorkflowRunParams,
+  type CreateEventRequest,
+  type CreateHookRequest,
+  type CreateStepRequest,
   type CreateWorkflowRunRequest,
+  type Event,
+  EventSchema,
+  type GetHookParams,
+  type GetStepParams,
   type GetWorkflowRunParams,
+  type Hook,
+  HookSchema,
+  ListEventsByCorrelationIdParams,
+  type ListEventsParams,
   type ListWorkflowRunsParams,
+  ListWorkflowRunStepsParams,
   type PauseWorkflowRunParams,
   type ResumeWorkflowRunParams,
+  type Step,
+  StepSchema,
+  type UpdateStepRequest,
   type UpdateWorkflowRunRequest,
   type WorkflowRun,
-  type Step,
-  type CreateStepRequest,
-  type GetStepParams,
-  type UpdateStepRequest,
-  type Hook,
-  type CreateHookRequest,
-  type GetHookParams,
-  type Event,
-  type CreateEventRequest,
-  type ListEventsParams,
-  ListWorkflowRunStepsParams,
-  ListEventsByCorrelationIdParams,
   WorkflowRunSchema,
-  StepSchema,
-  EventSchema,
-  HookSchema,
 } from "@workflow/world";
 import {
   DEFAULT_RESOLVE_DATA_OPTION,
+  filterEventData,
+  filterHookData,
   filterRunData,
   filterStepData,
-  filterHookData,
-  filterEventData,
 } from "./utils.js";
 
 import { JsonTransport } from "@vercel/queue";
-import { QueueParamsSchema, serde } from "@restatedev/common";
+import { serde } from "@restatedev/restate-sdk-zod";
+import { schemas } from "@restatedev/common";
 
 // key by runId
 
@@ -591,14 +592,12 @@ export const indexService = service({
       async (ctx: Context, param: { token: string }): Promise<Hook> => {
         const hookTokens = (await ctx
           .objectClient(keyValue, param.token)
-          .get()) as { runId: string; hookId: string }[];
+          .get()) as string[];
 
         if (hookTokens === undefined || hookTokens.length === 0) {
           throw new TerminalError("No hooks found", { errorCode: 404 });
         }
-        const theHook = hookTokens[0];
-        const hook = await ctx.objectClient(hooksApi, theHook!.hookId).get({});
-        return hook;
+        return await ctx.objectClient(hooksApi, hookTokens[0]!).get({});
       }
     ),
 
@@ -626,7 +625,7 @@ export const queue = service({
           onMaxAttempts: "kill",
         },
 
-        input: serde.zod(QueueParamsSchema),
+        input: serde.zod(schemas.QueueParamsSchema),
       },
       async (ctx: Context, params) => {
         let pathname: string;
@@ -650,7 +649,7 @@ export const queue = service({
             headers: {
               "x-vqs-queue-name": params.queueName,
               "x-vqs-message-id": messageId,
-              "x-vqs-message-attempt": String(1), // TODO: fix this.
+              "x-vqs-message-attempt": String(params.attempt),
             },
           }
         );
@@ -661,11 +660,14 @@ export const queue = service({
         if (response.status === 503) {
           const { retryIn } = (await response.json()) as { retryIn: number };
 
+          // Increment attempt count
+          params.attempt += 1;
+
           ctx.serviceSendClient(queue).queue(
             params,
             rpc.sendOpts({
               delay: { seconds: retryIn },
-              input: serde.zod(QueueParamsSchema),
+              input: serde.zod(schemas.QueueParamsSchema),
             })
           );
 

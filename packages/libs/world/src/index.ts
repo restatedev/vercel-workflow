@@ -14,7 +14,6 @@ import { World } from "@workflow/world";
 import { createQueue } from "./queue.js";
 import { createStorage } from "./storage.js";
 import { createStreamer } from "./streamer.js";
-import { auth } from "./auth.js";
 
 export function createWorld(args?: {
   opts: ConnectionOpts;
@@ -28,7 +27,6 @@ export function createWorld(args?: {
     ...createQueue(client, deliverTo),
     ...createStorage(client),
     ...createStreamer(client),
-    ...auth,
     start: async () => {
       // TODO: verify subscription
     },

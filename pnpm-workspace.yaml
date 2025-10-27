@@ -9,13 +9,13 @@ catalog:
   workflow: ^4.0.1-beta.2
 
   # Restate SDK (all packages use same version)
-  "@restatedev/restate-sdk": 1.9.0
-  "@restatedev/restate-sdk-zod": 1.9.0
-  "@restatedev/restate-sdk-clients": 1.9.0
-  "@restatedev/restate-sdk-core": 1.9.0
+  "@restatedev/restate-sdk": 1.9.1
+  "@restatedev/restate-sdk-zod": 1.9.1
+  "@restatedev/restate-sdk-clients": 1.9.1
+  "@restatedev/restate-sdk-core": 1.9.1
 
   # Workflow world
-  "@workflow/world": ^4.0.1-beta.1
+  "@workflow/world": ^4.0.1-beta.2
 
   # Vercel
   "@vercel/queue": 0.0.0-alpha.23

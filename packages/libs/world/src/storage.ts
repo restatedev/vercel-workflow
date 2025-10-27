@@ -1,10 +1,6 @@
 import { Ingress, rpc } from "@restatedev/restate-sdk-clients";
 
 import {
-  EventSchema,
-  HookSchema,
-  StepSchema,
-  WorkflowRunSchema,
   type CancelWorkflowRunParams,
   type CreateEventParams,
   type CreateEventRequest,
@@ -12,10 +8,12 @@ import {
   type CreateStepRequest,
   type CreateWorkflowRunRequest,
   type Event,
+  EventSchema,
   type GetHookParams,
   type GetStepParams,
   type GetWorkflowRunParams,
   type Hook,
+  HookSchema,
   type ListEventsByCorrelationIdParams,
   type ListEventsParams,
   type ListHooksParams,
@@ -25,14 +23,16 @@ import {
   type PauseWorkflowRunParams,
   type ResumeWorkflowRunParams,
   type Step,
+  StepSchema,
   type Storage,
   type UpdateStepRequest,
   type UpdateWorkflowRunRequest,
   type WorkflowRun,
+  WorkflowRunSchema,
 } from "@workflow/world";
 
-import type { IndexService, WorkflowApi, HooksApi } from "@restatedev/backend";
-import { serde } from "@restatedev/common";
+import type { HooksApi, IndexService, WorkflowApi } from "@restatedev/backend";
+import { serde } from "@restatedev/restate-sdk-zod";
 
 const createStorage = (client: Ingress): Storage => {
   return {
@@ -245,23 +245,20 @@ const createStorage = (client: Ingress): Storage => {
         hookId: string,
         params?: GetHookParams
       ): Promise<Hook> {
-        const res = await client
+        return await client
           .objectClient<HooksApi>({ name: "hooks" }, hookId)
           .get(params, rpc.opts({ output: serde.zod(HookSchema) }));
-
-        return res;
       },
       getByToken: async function (
         token: string,
         params?: GetHookParams
       ): Promise<Hook> {
-        const res = await client
+        return await client
           .serviceClient<IndexService>({ name: "indexService" })
           .getHookByToken(
             { ...params, token },
             rpc.opts({ output: serde.zod(HookSchema) })
           );
-        return res;
       },
 
       list: async function (

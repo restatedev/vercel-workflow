@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/require-await */
-import { sleep } from "workflow";
+import { createWebhook, sleep } from "workflow";
 import { FatalError } from "workflow";
 
 export async function handleUserSignup(email: string) {
@@ -9,7 +9,8 @@ export async function handleUserSignup(email: string) {
 
   await sendWelcomeEmail(user);
   await sleep("30s");
-  await sendOnboardingEmail(user);
+  const webhook = createWebhook();
+  await sendOnboardingEmail(user, webhook.url);
 
   return { userId: user.id, status: "onboarded" };
 }
@@ -33,7 +34,10 @@ async function sendWelcomeEmail(user: { id: string; email: string }) {
   }
 }
 
-async function sendOnboardingEmail(user: { id: string; email: string }) {
+async function sendOnboardingEmail(
+  user: { id: string; email: string },
+  url: string
+) {
   "use step";
 
   if (!user.email.includes("@")) {
@@ -42,4 +46,5 @@ async function sendOnboardingEmail(user: { id: string; email: string }) {
   }
 
   console.log(`Sending onboarding email to user: ${user.id}`);
+  console.log(`Complete it with webhook: ${url}`);
 }

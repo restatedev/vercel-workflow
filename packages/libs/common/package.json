@@ -28,7 +28,6 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@restatedev/restate-sdk-core": "catalog:",
     "@workflow/world": "catalog:",
     "zod": "catalog:"
   },
