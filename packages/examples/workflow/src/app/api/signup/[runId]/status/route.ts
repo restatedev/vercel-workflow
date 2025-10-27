@@ -21,5 +21,12 @@ interface RouteParams {
 export async function GET(request: Request, { params }: RouteParams) {
   const { runId } = await params;
   const run = getRun(runId);
-  return new NextResponse(run.getReadable({startIndex: 0}), {status: 200})
+  return new NextResponse(run.getReadable({startIndex: 0}), {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    }
+  })
 }

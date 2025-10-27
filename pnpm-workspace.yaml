@@ -6,7 +6,7 @@ packages:
 catalog:
   # Existing
   zod: ^4.1.12
-  workflow: ^4.0.1-beta.2
+  workflow: ^4.0.1-beta.3
 
   # Restate SDK (all packages use same version)
   "@restatedev/restate-sdk": 1.9.1
