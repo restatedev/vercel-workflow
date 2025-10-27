@@ -10,5 +10,5 @@ export default defineConfig({
   ignoreWatch: ["dist", ".turbo", "*.tsbuildinfo"],
   // Add any publishable packages from this monorepo that this package depends on
   external: [],
-  noExternal: ["@restatedev/common", "@restatedev/backend/types"],
+  noExternal: ["@restatedev/common", "@restatedev/vercel-backend/types"],
 });

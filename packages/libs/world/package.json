@@ -1,5 +1,5 @@
 {
-  "name": "@restatedev/world",
+  "name": "@restatedev/vercel-world",
   "version": "0.0.0",
   "description": "TODO: Add description",
   "author": "TODO: Add author",
@@ -49,7 +49,7 @@
   },
   "dependencies": {
     "@restatedev/common": "workspace:*",
-    "@restatedev/backend": "workspace:*",
+    "@restatedev/vercel-backend": "workspace:*",
     "@workflow/world": "catalog:",
     "@workflow/errors": "catalog:",
     "@restatedev/restate-sdk-clients": "catalog:",

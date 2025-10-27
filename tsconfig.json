@@ -4,10 +4,12 @@
     "composite": false,
     "baseUrl": ".",
     "paths": {
-      "@restatedev/backend": ["packages/libs/backend/src/index.ts"],
+      "@restatedev/vercel-backend": ["packages/libs/backend/src/index.ts"],
+      "@restatedev/vercel-backend/types": [
+        "packages/libs/backend/src/types.ts"
+      ],
       "@restatedev/common": ["packages/libs/common/src/index.ts"],
-      "@restatedev/world": ["packages/libs/world/src/index.ts"],
-      "@restatedev/backend/types": ["./packages/libs/backend/src/types.ts"]
+      "@restatedev/vercel-world": ["packages/libs/world/src/index.ts"]
     }
   },
   "files": [],

@@ -3,7 +3,7 @@ import { JsonTransport } from "@vercel/queue";
 import z from "zod/v4";
 import { Ingress, rpc } from "@restatedev/restate-sdk-clients";
 import { serde } from "@restatedev/restate-sdk-zod";
-import { QueueService } from "@restatedev/backend/types";
+import { QueueService } from "@restatedev/vercel-backend/types";
 import { schemas } from "@restatedev/common";
 
 const HeaderParser = z.object({

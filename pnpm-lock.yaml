@@ -98,7 +98,7 @@ importers:
 
   packages/examples/workflow:
     dependencies:
-      '@restatedev/world':
+      '@restatedev/vercel-world':
         specifier: workspace:*
         version: link:../../libs/world
       next:
@@ -150,9 +150,6 @@ importers:
 
   packages/libs/world:
     dependencies:
-      '@restatedev/backend':
-        specifier: workspace:*
-        version: link:../backend
       '@restatedev/common':
         specifier: workspace:*
         version: link:../common
@@ -165,6 +162,9 @@ importers:
       '@restatedev/restate-sdk-zod':
         specifier: 'catalog:'
         version: 1.9.1(zod@4.1.12)
+      '@restatedev/vercel-backend':
+        specifier: workspace:*
+        version: link:../backend
       '@vercel/queue':
         specifier: 'catalog:'
         version: 0.0.0-alpha.23

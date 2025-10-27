@@ -30,7 +30,7 @@
     "inspect": "workflow inspect runs"
   },
   "dependencies": {
-    "@restatedev/world": "workspace:*",
+    "@restatedev/vercel-world": "workspace:*",
     "workflow": "catalog:",
     "next": "16.0.0"
   },

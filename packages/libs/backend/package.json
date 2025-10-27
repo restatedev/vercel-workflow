@@ -1,5 +1,5 @@
 {
-  "name": "@restatedev/backend",
+  "name": "@restatedev/vercel-backend",
   "version": "0.0.0",
   "description": "TODO: Add description",
   "author": "TODO: Add author",
@@ -22,9 +22,9 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./server": {
-      "import": "./dist/server.js",
-      "require": "./dist/server.cjs"
+    "./serve": {
+      "import": "./dist/serve.js",
+      "require": "./dist/serve.cjs"
     },
     "./types": {
       "import": "./dist/types.js",
@@ -68,6 +68,9 @@
     "*": {
       "types": [
         "./dist/types.d.ts"
+      ],
+      "serve": [
+        "./dist/serve.d.ts"
       ]
     }
   }

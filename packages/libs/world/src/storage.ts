@@ -31,7 +31,7 @@ import {
   WorkflowRunSchema,
 } from "@workflow/world";
 
-import type { IndexApi, WorkflowApi } from "@restatedev/backend/types";
+import type { IndexApi, WorkflowApi } from "@restatedev/vercel-backend/types";
 import { serde } from "@restatedev/restate-sdk-zod";
 import { WorkflowAPIError, WorkflowRunNotFoundError } from "@workflow/errors";
 
