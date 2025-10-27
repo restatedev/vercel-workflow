@@ -25,6 +25,10 @@ pnpm dev
 # Run workflow example
 pnpm examples:dev
 
+# Build and run backend service
+pnpm build
+pnpm backend:run
+
 # Inspect workflows
 pnpm inspect
 
