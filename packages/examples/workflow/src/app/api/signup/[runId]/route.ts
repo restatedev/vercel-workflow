@@ -9,22 +9,22 @@
  * TODO: Add repository URL
  */
 
-import { NextResponse } from "next/server.js";
+import { NextResponse, NextRequest } from "next/server.js";
 import { getRun } from "workflow/api";
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     runId: string;
-  };
+  }>;
 }
 
-export async function GET(request: Request, { params }: RouteParams) {
+export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { runId } = await params;
 
   const run = getRun(runId);
   const status = await run.status;
 
-  let res: unknown | undefined = undefined;
+  let res: unknown = undefined;
   if (status === "completed") {
     res = await run.returnValue;
   }

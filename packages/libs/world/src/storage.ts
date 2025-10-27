@@ -31,10 +31,11 @@ import {
   WorkflowRunSchema,
 } from "@workflow/world";
 
-import type { IndexApi, WorkflowApi } from "@restatedev/backend";
+import type { IndexApi, WorkflowApi } from "@restatedev/vercel-backend/types";
 import { serde } from "@restatedev/restate-sdk-zod";
 import { WorkflowAPIError, WorkflowRunNotFoundError } from "@workflow/errors";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function throwVercelError(e: any, runId?: string): never {
   if (e instanceof HttpCallError) {
     if (runId && e.status == 404) {

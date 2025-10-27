@@ -14,6 +14,7 @@ import { QueuePayloadSchema } from "@workflow/world";
 import * as z4 from "zod/v4";
 
 /** Bunch of zod schemas we need **/
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace schemas {
   export const QueueParamsSchema = z4.object({
     deliverTo: z4.string(),

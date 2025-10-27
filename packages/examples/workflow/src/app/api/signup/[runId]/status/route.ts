@@ -9,24 +9,24 @@
  * TODO: Add repository URL
  */
 
-import { NextResponse } from "next/server.js";
+import { NextResponse, NextRequest } from "next/server.js";
 import { getRun } from "workflow/api";
 
-interface RouteParams {
-  params: {
+type RouteParams = {
+  params: Promise<{
     runId: string;
-  };
-}
+  }>;
+};
 
-export async function GET(request: Request, { params }: RouteParams) {
+export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { runId } = await params;
   const run = getRun(runId);
-  return new NextResponse(run.getReadable({startIndex: 0}), {
+  return new NextResponse(run.getReadable({ startIndex: 0 }), {
     status: 200,
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    }
-  })
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
 }

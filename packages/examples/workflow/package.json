@@ -1,17 +1,17 @@
 {
   "name": "@restatedev/workflow",
   "version": "0.0.0",
-  "description": "TODO: Add description",
-  "author": "TODO: Add author",
-  "email": "TODO: Add email",
+  "description": "Example Next.js application demonstrating Vercel Workflow with Restate",
+  "author": "Restate Developers",
+  "email": "code@restate.dev",
   "license": "MIT",
-  "homepage": "TODO: Add homepage URL",
+  "homepage": "https://github.com/restatedev/vercel-workflow#readme",
   "repository": {
     "type": "git",
-    "url": "TODO: Add repository URL"
+    "url": "git+https://github.com/restatedev/vercel-workflow.git"
   },
   "bugs": {
-    "url": "TODO: Add bugs URL"
+    "url": "https://github.com/restatedev/vercel-workflow/issues"
   },
   "private": true,
   "type": "module",
@@ -23,14 +23,14 @@
     "dev": "next dev",
     "start": "turbo run _start --filter={.}...",
     "_start": "next start --port 3000",
-    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo .next .swc src/app/.well-known",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint .",
     "inspect": "workflow inspect runs"
   },
   "dependencies": {
-    "@restatedev/world": "workspace:*",
+    "@restatedev/vercel-world": "workspace:*",
     "workflow": "catalog:",
     "next": "16.0.0"
   },

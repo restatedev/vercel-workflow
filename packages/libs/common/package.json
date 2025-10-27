@@ -1,17 +1,17 @@
 {
   "name": "@restatedev/common",
   "version": "0.0.0",
-  "description": "TODO: Add description",
-  "author": "TODO: Add author",
-  "email": "TODO: Add email",
+  "description": "Common types and utilities for Vercel Workflow with Restate",
+  "author": "Restate Developers",
+  "email": "code@restate.dev",
   "license": "MIT",
-  "homepage": "TODO: Add homepage URL",
+  "homepage": "https://github.com/restatedev/vercel-workflow#readme",
   "repository": {
     "type": "git",
-    "url": "TODO: Add repository URL"
+    "url": "git+https://github.com/restatedev/vercel-workflow.git"
   },
   "bugs": {
-    "url": "TODO: Add bugs URL"
+    "url": "https://github.com/restatedev/vercel-workflow/issues"
   },
   "private": true,
   "type": "module",

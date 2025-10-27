@@ -37,7 +37,9 @@ export function filterEventData(
   resolveData?: "none" | "all"
 ): Event {
   if (resolveData === "none") {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
     const { eventData: _eventData, ...rest } = event as any;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return rest;
   }
   return event;
@@ -45,7 +47,9 @@ export function filterEventData(
 
 export function filterHookData(hook: Hook, resolveData?: "none" | "all"): Hook {
   if (resolveData === "none") {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
     const { metadata: _metadata, ...rest } = hook as any;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return rest;
   }
   return hook;

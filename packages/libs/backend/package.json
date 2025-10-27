@@ -1,17 +1,17 @@
 {
-  "name": "@restatedev/backend",
+  "name": "@restatedev/vercel-backend",
   "version": "0.0.0",
-  "description": "TODO: Add description",
-  "author": "TODO: Add author",
-  "email": "TODO: Add email",
+  "description": "Restate backend services and virtual objects for Vercel Workflow integration",
+  "author": "Restate Developers",
+  "email": "code@restate.dev",
   "license": "MIT",
-  "homepage": "TODO: Add homepage URL",
+  "homepage": "https://github.com/restatedev/vercel-workflow#readme",
   "repository": {
     "type": "git",
-    "url": "TODO: Add repository URL"
+    "url": "git+https://github.com/restatedev/vercel-workflow.git"
   },
   "bugs": {
-    "url": "TODO: Add bugs URL"
+    "url": "https://github.com/restatedev/vercel-workflow/issues"
   },
   "type": "module",
   "main": "./dist/index.cjs",
@@ -21,6 +21,14 @@
     ".": {
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./serve": {
+      "import": "./dist/serve.js",
+      "require": "./dist/serve.cjs"
+    },
+    "./types": {
+      "import": "./dist/types.js",
+      "require": "./dist/types.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -37,7 +45,7 @@
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc --noEmit && tsdown",
     "dev": "tsc --noEmit --watch",
-    "start": "node ./dist/index.js",
+    "start": "node ./dist/serve.js",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
@@ -45,7 +53,7 @@
     "check:exports": "turbo run _check:exports --filter={.}...",
     "_check:exports": "attw --pack .",
     "check:api": "turbo run _check:api --filter={.}...",
-    "_check:api": "api-extractor run --local",
+    "_check:api": "api-extractor run --local && api-extractor run --local --config api-extractor.types.json",
     "prepublishOnly": "pnpm -w verify"
   },
   "dependencies": {
@@ -55,5 +63,15 @@
     "@restatedev/pubsub": "catalog:",
     "@vercel/queue": "catalog:",
     "@workflow/world": "catalog:"
+  },
+  "typesVersions": {
+    "*": {
+      "types": [
+        "./dist/types.d.ts"
+      ],
+      "serve": [
+        "./dist/serve.d.ts"
+      ]
+    }
   }
 }
