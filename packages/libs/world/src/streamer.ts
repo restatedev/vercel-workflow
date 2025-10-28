@@ -56,7 +56,6 @@ export const createStreamer = (client: Ingress): Streamer => {
 
                 if ("eos" in content && content.eos) {
                   // End of stream
-                  controller.close();
                   break;
                 }
 
@@ -71,7 +70,7 @@ export const createStreamer = (client: Ingress): Streamer => {
                 }
               }
 
-              // If the loop completes without explicit eos, close the stream
+              // Close the stream
               controller.close();
             } catch (error) {
               controller.error(error);
