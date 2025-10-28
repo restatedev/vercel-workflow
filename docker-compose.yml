@@ -1,0 +1,26 @@
+services:
+  world-backend:
+    network_mode: host
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+  runtime:
+    image: docker.io/restatedev/restate:1.5.3
+    network_mode: host
+    environment:
+      - "RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS=pause"
+
+  runtimesetup:
+    image: docker.io/restatedev/restate
+    network_mode: host
+    depends_on:
+      - runtime
+      - world-backend
+    restart: "no"
+    entrypoint: [
+      "sh",
+      "-c",
+      'sleep 5 &&
+        restate dp register -y http://localhost:9080',
+    ]

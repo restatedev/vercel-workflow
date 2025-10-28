@@ -1,42 +1,84 @@
-# Vercel Restate World
+# Restate + useworkflow.dev
 
-A TypeScript monorepo demonstrating Restate integration with Vercel Workflow. See [DEVELOPMENT.md](./DEVELOPMENT.md) for comprehensive monorepo documentation.
+Use Restate with [useworkflow.dev](http://useworkflow.dev).
 
-# Warning
+> [!IMPORTANT]
+> This integration is a proof of concept.
 
-This integration is currently under construction.
+## How to use it
 
-## Packages
+To run this integration, you'll need:
 
-- **`@restatedev/world`**: Package using typed client to implement World by talking to Restate virtual objects/services
-- **`@restatedev/backend`**: Collection of Restate virtual objects and services  
-- **`@restatedev/common`**: Common types package (private, not publishable)
-- **`@restatedev/workflow`**: Example package built using `workflow` package
+* The `@restatedev/world` package
+* Restate + Restate `World` backend
+* An example workflow from Vercel `workflow-examples` repo.
 
-## Quick Start
+### Prepare the `@restatedev/world` package
 
-```bash
-# Install dependencies
-pnpm install
-
-# Start dev mode (type checking)
-pnpm dev
-
-# Run workflow example
-pnpm examples:dev
-
-# Build and run backend service
-pnpm build
-pnpm backend:run
-
-# Inspect workflows
-pnpm inspect
-
-# Run all checks (before committing)
-pnpm verify
+1. Clone this repo
+```shell
+git clone https://github.com/restatedev/vercel-workflow.git
+cd vercel-workflow
 ```
 
-## Documentation
+2. Build it
+```shell
+pnpm install
+pnpm build
+pnpm package
+```
 
-- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Complete monorepo guide (PNPM, Turbo, tsdown, Vitest, Changesets)
-- **[AGENTS.md](./AGENTS.md)** - Guide for AI coding assistants with commands, code style, and best practices
+### Run Restate and the Restate `world` backend
+
+Run in the root of this repo:
+
+```shell
+docker compose up
+```
+
+To start Restate, together with the service implementing the `World` backend.
+
+### Run a Workflow example
+
+Grab any of the Vercel workflow examples, e.g., the Flight booking example, cloning it in a new directory:
+
+```shell
+git clone https://github.com/vercel/workflow-examples
+cd workflow-examples/flight-booking-app
+```
+
+Each example might require additional setup, e.g. the flight booking app requires a Vercel API Gateway key in the `.env.local` file:
+
+```shell
+touch .env.local
+echo "API_GATEWAY_KEY=<YOUR_KEY>" >> .env.local
+```
+
+Then install `@restatedev/world`:
+
+```shell
+pnpm add <DIR_WHERE_YOU_CLONED_THIS_REPO>/restatedev-vercel-world-0.0.0.tgz
+```
+
+Now setup Vercel to use `@restatedev/world`:
+
+```shell
+export WORKFLOW_TARGET_WORLD=@restatedev/vercel-world
+```
+
+And you're ready to run the example:
+
+```shell
+pnpm dev
+```
+
+Head over to http://localhost:3000 and you're ready to use the example.
+You can access the Restate UI at http://localhost:9070.
+
+You can also use the Vercel inspection UI with:
+
+```shell
+npx workflow inspect run --web
+```
+
+Enjoy!
