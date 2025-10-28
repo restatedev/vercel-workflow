@@ -5,80 +5,70 @@ Use Restate with [useworkflow.dev](http://useworkflow.dev).
 > [!IMPORTANT]
 > This integration is a proof of concept.
 
-## How to use it
+## Quick Start
 
-To run this integration, you'll need:
+**Prerequisites:**
+- Docker (or OrbStack on Mac) and Docker Compose
+- Node.js and `pnpm`
+- A Vercel Workflow example to run
 
-* The `@restatedev/world` package
-* Restate + Restate `World` backend
-* An example workflow from Vercel `workflow-examples` repo.
+### 1. Build the Restate World package
 
-### Prepare the `@restatedev/world` package
-
-1. Clone this repo
 ```shell
 git clone https://github.com/restatedev/vercel-workflow.git
 cd vercel-workflow
+pnpm install && pnpm build && pnpm package
 ```
 
-2. Build it
-```shell
-pnpm install
-pnpm build
-pnpm package
-```
+This creates the `@restatedev/world` package that bridges Vercel Workflow to Restate.
 
-### Run Restate and the Restate `world` backend
-
-Run in the root of this repo:
+### 2. Start the Restate infrastructure
 
 ```shell
 docker compose up
 ```
 
-To start Restate, together with the service implementing the `World` backend.
+This spins up both Restate and the World backend service. Leave this running.
 
-### Run a Workflow example
+### 3. Run a Vercel Workflow example
 
-Grab any of the Vercel workflow examples, e.g., the Flight booking example, cloning it in a new directory:
+In a new terminal, grab any example from Vercel's collection:
 
 ```shell
 git clone https://github.com/vercel/workflow-examples
 cd workflow-examples/flight-booking-app
 ```
 
-Each example might require additional setup, e.g. the flight booking app requires a Vercel API Gateway key in the `.env.local` file:
+Install the `@restatedev/world` package:
 
 ```shell
-touch .env.local
-echo "API_GATEWAY_KEY=<YOUR_KEY>" >> .env.local
+pnpm add <PATH_TO_CLONED_REPO>/restatedev-vercel-world-0.0.0.tgz
 ```
 
-Then install `@restatedev/world`:
-
-```shell
-pnpm add <DIR_WHERE_YOU_CLONED_THIS_REPO>/restatedev-vercel-world-0.0.0.tgz
-```
-
-Now setup Vercel to use `@restatedev/world`:
+Configure Vercel Workflow to use Restate:
 
 ```shell
 export WORKFLOW_TARGET_WORLD=@restatedev/vercel-world
 ```
 
-And you're ready to run the example:
+Some examples need additional config (like API keys). Check the example's README and add them to `.env.local`:
+
+```shell
+echo "API_GATEWAY_KEY=<YOUR_KEY>" >> .env.local
+```
+
+Start the dev server:
 
 ```shell
 pnpm dev
 ```
 
-Head over to http://localhost:3000 and you're ready to use the example.
-You can access the Restate UI at http://localhost:9070.
+### 4. See it in action
 
-You can also use the Vercel inspection UI with:
+- **Your app:** http://localhost:3000
+- **Restate UI:** http://localhost:9070/ui/state/workflow — Check the workflow state in Restate's virtual objects
+- **Workflow Inspector:** Run `npx workflow inspect run --web` for Vercel's debugging tools
 
-```shell
-npx workflow inspect run --web
-```
+Now trigger a workflow in your app and watch it execute through Restate's infrastructure. Every step is persisted, observable, and resumable.
 
-Enjoy!
+Check out [restate.dev](https://restate.dev) for more on durable execution.
