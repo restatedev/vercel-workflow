@@ -107,7 +107,6 @@ export const workflow = object({
           input: (data.input as any[]) || [],
           output: undefined,
           error: undefined,
-          errorCode: undefined,
           startedAt: undefined,
           completedAt: undefined,
           createdAt: now,
@@ -152,11 +151,11 @@ export const workflow = object({
         }
 
         const now = new Date();
-        const updatedRun: WorkflowRun = {
+        const updatedRun = {
           ...run,
           ...data,
           updatedAt: now,
-        };
+        } as WorkflowRun;
 
         // Only set startedAt the first time the run transitions to 'running'
         if (data.status === "running" && !updatedRun.startedAt) {
@@ -188,12 +187,12 @@ export const workflow = object({
         }
 
         const now = new Date();
-        const updatedRun: WorkflowRun = {
+        const updatedRun = {
           ...run,
           status: "cancelled",
           updatedAt: now,
           completedAt: now,
-        };
+        } as WorkflowRun;
 
         ctx.set("run", updatedRun, serde.zod(WorkflowRunSchema));
 
@@ -213,11 +212,11 @@ export const workflow = object({
         }
 
         const now = new Date();
-        const updatedRun: WorkflowRun = {
+        const updatedRun = {
           ...run,
           status: "paused",
           updatedAt: now,
-        };
+        } as WorkflowRun;
 
         ctx.set("run", updatedRun, serde.zod(WorkflowRunSchema));
 
@@ -237,11 +236,11 @@ export const workflow = object({
         }
 
         const now = new Date();
-        const updatedRun: WorkflowRun = {
+        const updatedRun = {
           ...run,
           status: "running",
           updatedAt: now,
-        };
+        } as WorkflowRun;
 
         // Only set startedAt the first time the run transitions to 'running'
         if (!updatedRun.startedAt) {
@@ -279,7 +278,6 @@ export const workflow = object({
           input: data.input as any[],
           output: undefined,
           error: undefined,
-          errorCode: undefined,
           attempt: 0,
           startedAt: undefined,
           completedAt: undefined,
@@ -640,6 +638,9 @@ export const index = service({
         const runIds = (await ctx
           .objectClient(keyValue, param.correlationId)
           .get()) as string[];
+        if (runIds === undefined || runIds.length === 0) {
+          return [];
+        }
 
         const matchingEvents: Event[] = [];
         for (const runId of runIds || []) {
@@ -723,6 +724,9 @@ export const index = service({
         const runIds = (await ctx
           .objectClient(keyValue, "workflows")
           .get()) as string[];
+        if (runIds === undefined || runIds.length === 0) {
+          return [];
+        }
 
         const orderingSign = params.pagination?.sortOrder === "desc" ? -1 : 1;
         return (
@@ -767,6 +771,9 @@ export const index = service({
         const runIds = (await ctx
           .objectClient(keyValue, "workflows")
           .get()) as string[];
+        if (runIds === undefined || runIds.length === 0) {
+          return [];
+        }
 
         const orderingSign = params.pagination?.sortOrder === "desc" ? -1 : 1;
         return (

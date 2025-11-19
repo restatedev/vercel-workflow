@@ -19,8 +19,8 @@ services:
       - world-backend
     restart: "no"
     entrypoint: [
-      "sh",
-      "-c",
-      'sleep 5 &&
-        restate dp register -y http://localhost:9080',
-    ]
+        "sh",
+        "-c",
+        "sleep 5 &&
+        restate dp register -y http://localhost:9080",
+      ]

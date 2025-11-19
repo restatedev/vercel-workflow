@@ -21,6 +21,7 @@ export const createStreamer = (client: Ingress): Streamer => {
   return {
     writeToStream: async function (
       name: string,
+      _runId: string | Promise<string>,
       chunk: string | Uint8Array | Buffer
     ): Promise<void> {
       if (typeof chunk === "string") {
@@ -35,7 +36,10 @@ export const createStreamer = (client: Ingress): Streamer => {
         } as StreamContent);
       }
     },
-    closeStream: async function (name: string): Promise<void> {
+    closeStream: async function (
+      name: string,
+      _runId: string | Promise<string>
+    ): Promise<void> {
       await pubsub.publish(name, { eos: true } as StreamContent);
     },
     readFromStream: function (

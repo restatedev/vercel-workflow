@@ -67,7 +67,7 @@ pnpm dev
 
 - **Your app:** http://localhost:3000
 - **Restate UI:** http://localhost:9070/ui/state/workflow — Check the workflow state in Restate's virtual objects
-- **Workflow Inspector:** Run `npx workflow inspect run --web` for Vercel's debugging tools
+- **Workflow Inspector:** Run `npx workflow web` for Vercel's debugging tools
 
 Now trigger a workflow in your app and watch it execute through Restate's infrastructure. Every step is persisted, observable, and resumable.
 
