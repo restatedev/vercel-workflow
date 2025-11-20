@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/types.ts", "src/serve.ts"],
+  entry: ["src/index.ts", "src/runtime.ts", "src/internal/private.ts"],
   platform: "neutral",
   exports: true,
   format: ["esm", "cjs"],
@@ -10,5 +10,5 @@ export default defineConfig({
   ignoreWatch: ["dist", ".turbo", "*.tsbuildinfo"],
   // Add any publishable packages from this monorepo that this package depends on
   external: [],
-  noExternal: ["@restatedev/common"],
+  noExternal: [],
 });
