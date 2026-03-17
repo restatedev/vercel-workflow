@@ -32,7 +32,7 @@
     "deps:update": "pnpm update --latest --recursive",
     "inspect": "pnpm --filter \"./packages/examples/*\" inspect",
     "prepackage": "pnpm install && pnpm clean && pnpm build",
-    "package": "pnpm --filter \"./packages/libs/world\" pack"
+    "package": "pnpm --filter \"./packages/libs/workflow\" pack"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
