@@ -146,7 +146,9 @@ function createUseStep(ctx: WorkflowOrchestratorContext) {
 }
 
 export function createCreateHook(ctx: WorkflowOrchestratorContext) {
-  return function createHookImpl<T = unknown>(options: HookOptions = {}): Hook<T> {
+  return function createHookImpl<T = unknown>(
+    options: HookOptions = {}
+  ): Hook<T> {
     // Generate hook ID or token
     const token = options.token ?? ctx.restateCtx.rand.uuidv4();
     const { id, promise } = ctx.restateCtx.awakeable();
@@ -163,7 +165,9 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext) {
       // biome-ignore lint/suspicious/noThenProperty: Intentionally thenable
       then<TResult1 = T, TResult2 = never>(
         onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+        onrejected?:
+          | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
+          | null
       ): Promise<TResult1 | TResult2> {
         return (promise as Promise<T>).then(onfulfilled, onrejected);
       },
