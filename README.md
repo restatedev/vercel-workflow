@@ -46,3 +46,8 @@ npx @restatedev/restate deployments register http://localhost:3000/.restate-well
 ```shell
   curl -X POST http://localhost:8080/handleUserSignup/run --json '"test@example.com"'   
 ```
+
+The service logs print the hook token. You can use it to resolve the hook:
+```shell
+curl -X POST http://localhost:8080/workflowHooks/your-hook-token-123/resolve --json '{"message": "hello"}'
+```

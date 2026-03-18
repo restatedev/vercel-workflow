@@ -23,6 +23,6 @@ async function sendWelcomeEmail(user: { id: string; email: string }) {
 
   if (Math.random() < 0.7) {
     // By default, steps will be retried for unhandled errors
-    throw new Error("Retryable!");
+    throw new Error("[SIMULATED] Email sending failed!");
   }
 }

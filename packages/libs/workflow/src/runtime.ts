@@ -7,7 +7,7 @@ import {
 } from "@restatedev/restate-sdk/fetch";
 import * as serialization from "@workflow/core/serialization";
 import { createContext as vmCreateContext, runInContext } from "node:vm";
-import { parseStepName, parseWorkflowName } from "./parse-name.js";
+import { parseStepName } from "./parse-name.js";
 import { globalStepRegistry } from "./internal/private.js";
 import { WORKFLOW_USE_STEP, WORKFLOW_CREATE_HOOK } from "./symbols.js";
 import { Hook, HookOptions } from "@workflow/core";
@@ -30,21 +30,16 @@ function createService(workflowCode: string) {
 }
 
 interface WorkflowOrchestratorContext {
-  globalThis: any;
+  globalThis: Record<string, unknown>;
   restateCtx: Context;
 }
 
 async function restateHandler(
   restateCtx: Context,
   workflowCode: string,
-  input: any
+  input: unknown
 ) {
   const { context, globalThis: vmGlobalThis } = createContext(restateCtx);
-
-  // TODO how do i extract this?!
-  //  Probably create service above needs to loop through `globalThis.__private_workflows` in the generated code
-  const workflowName =
-    "workflow//src/workflows/user-signup.ts//handleUserSignup";
 
   const workflowContext: WorkflowOrchestratorContext = {
     globalThis: vmGlobalThis,
@@ -59,17 +54,22 @@ async function restateHandler(
   // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
   vmGlobalThis[WORKFLOW_CREATE_HOOK] = createHook;
 
-  // Get a reference to the user-defined workflow function.
-  // The filename parameter ensures stack traces show a meaningful name
-  // (e.g., "example/workflows/99_e2e.ts") instead of "evalmachine.<anonymous>".
-  const parsedName = parseWorkflowName(workflowName);
-  const filename = parsedName?.path || workflowName;
+  // Execute the workflow code to populate globalThis.__private_workflows,
+  // then retrieve the first registered workflow function.
+  runInContext(workflowCode, context);
 
-  const workflowFn = runInContext(
-    `${workflowCode}; globalThis.__private_workflows?.get(${JSON.stringify(workflowName)})`,
-    context,
-    { filename }
-  );
+  const workflowsMap = vmGlobalThis.__private_workflows as
+    | Map<string, (...args: unknown[]) => unknown>
+    | undefined;
+  const firstEntry = workflowsMap?.entries().next().value;
+
+  if (!firstEntry) {
+    throw new ReferenceError(
+      "No workflows registered. The workflow code did not set globalThis.__private_workflows."
+    );
+  }
+
+  const [workflowName, workflowFn] = firstEntry;
 
   if (typeof workflowFn !== "function") {
     throw new ReferenceError(
@@ -79,20 +79,22 @@ async function restateHandler(
     );
   }
 
-  const args = serialization.hydrateWorkflowArguments([input], vmGlobalThis);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const args: unknown[] = await serialization.hydrateWorkflowArguments(
+    [input],
+    restateCtx.request().id,
+    undefined,
+    vmGlobalThis
+  );
 
   // Invoke user workflow
-  const result = await workflowFn(...args);
-  return result;
-
-  // TODO the return value here is serializable? how this hydrate/dehydrate thing works even?
-  //return serialization.dehydrateWorkflowReturnValue(result, vmGlobalThis);
+  return workflowFn(...args);
 }
 
 function createContext(restateCtx: Context) {
   const context = vmCreateContext();
 
-  const g: typeof globalThis = runInContext("globalThis", context);
+  const g = runInContext("globalThis", context) as Record<string, unknown>;
 
   // Hook console
   g.console = restateCtx.console;
@@ -100,7 +102,7 @@ function createContext(restateCtx: Context) {
   // HACK: Shim `exports` for the bundle
   // TODO(slinkydeveloper) seems important, need to figure out why
   g.exports = {};
-  (g as any).module = { exports: g.exports };
+  g.module = { exports: g.exports };
 
   return {
     context,
@@ -109,33 +111,18 @@ function createContext(restateCtx: Context) {
 }
 
 function createUseStep(ctx: WorkflowOrchestratorContext) {
-  return function useStep<Args extends any[], Result>(stepName: string) {
+  return function useStep<Args extends unknown[], Result>(stepName: string) {
     const stepFunction = (...args: Args): Promise<Result> => {
       const stepFn = globalStepRegistry.get(stepName);
       if (stepFn === undefined) {
         throw new Error(
-          `Can't find ${stepName} in the global registry. Available steps: ${globalStepRegistry.keys()}`
+          `Can't find ${stepName} in the global registry. Available steps: ${[...globalStepRegistry.keys()].join(", ")}`
         );
       }
 
       return ctx.restateCtx.run(
         parseStepName(stepName)?.shortName ?? stepName,
-        () => stepFn(...args)
-        // TODO figure out how to connect to their serde stack
-        // {
-        //   serde: {
-        //     serialize: function (value: unknown): Uint8Array {
-        //       const hydratedResult = serialization.dehydrateStepReturnValue(
-        //         value,
-        //         ctx.globalThis
-        //       );
-        //     },
-        //     deserialize: function (data: Uint8Array): unknown {
-        //       throw new Error("Function not implemented.");
-        //     },
-        //     contentType: "application/json",
-        //   },
-        // }
+        () => stepFn(...args) as Result
       );
     };
 
@@ -159,7 +146,7 @@ function createUseStep(ctx: WorkflowOrchestratorContext) {
 }
 
 export function createCreateHook(ctx: WorkflowOrchestratorContext) {
-  return function createHookImpl<T = any>(options: HookOptions = {}): Hook<T> {
+  return function createHookImpl<T = unknown>(options: HookOptions = {}): Hook<T> {
     // Generate hook ID or token
     const token = options.token ?? ctx.restateCtx.rand.uuidv4();
     const { id, promise } = ctx.restateCtx.awakeable();
@@ -176,9 +163,17 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext) {
       // biome-ignore lint/suspicious/noThenProperty: Intentionally thenable
       then<TResult1 = T, TResult2 = never>(
         onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
       ): Promise<TResult1 | TResult2> {
         return (promise as Promise<T>).then(onfulfilled, onrejected);
+      },
+
+      dispose() {
+        ctx.restateCtx.objectSendClient(hookObj, token).dispose();
+      },
+
+      [Symbol.dispose]() {
+        this.dispose();
       },
 
       // Support `for await (const payload of hook) { … }` syntax
@@ -198,7 +193,7 @@ type HookMetadata = {
 };
 
 type HooksState = {
-  result: any;
+  result: unknown;
   metadata: HookMetadata;
   subscribers: string[];
 };
@@ -233,7 +228,7 @@ const hookObj = object({
     },
     resolve: async (
       ctx: ObjectContext<HooksState>,
-      input: any
+      input: unknown
     ): Promise<HookMetadata> => {
       const result = (await ctx.get("result")) ?? input;
       const subs = (await ctx.get("subscribers")) ?? [];
@@ -242,8 +237,9 @@ const hookObj = object({
       }
       ctx.clear("subscribers");
       ctx.set("result", result);
-      return (await ctx.get("metadata"))!!;
+      return (await ctx.get("metadata"))!;
     },
+    // eslint-disable-next-line @typescript-eslint/require-await
     dispose: async (ctx: ObjectContext) => {
       ctx.clearAll();
     },
