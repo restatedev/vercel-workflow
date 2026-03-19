@@ -4,6 +4,7 @@ import {
   object,
   ObjectContext,
   service,
+  TerminalError,
 } from "@restatedev/restate-sdk/fetch";
 import * as serialization from "@workflow/core/serialization";
 import { createContext as vmCreateContext, runInContext } from "node:vm";
@@ -16,6 +17,32 @@ import {
 } from "./symbols.js";
 import ms, { type StringValue } from "ms";
 import { Hook, HookOptions } from "@workflow/core";
+
+/**
+ * Duck-type check for Vercel Workflow's FatalError.
+ * Cannot use `instanceof` because the error originates from a VM context
+ * with a different prototype chain.
+ */
+function isFatalError(err: unknown): err is Error & { fatal: true } {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "message" in err &&
+    (("fatal" in err && (err as Record<string, unknown>).fatal === true) ||
+      ("name" in err && (err as Record<string, unknown>).name === "FatalError"))
+  );
+}
+
+/**
+ * If the error is a Vercel Workflow FatalError, re-throw as a Restate
+ * TerminalError so that Restate stops retrying.
+ */
+function rethrowFatalAsTerminal(err: unknown): never {
+  if (isFatalError(err)) {
+    throw new TerminalError(err.message);
+  }
+  throw err;
+}
 
 export function workflowEntrypoint(workflowCode: string) {
   return createEndpointHandler({
@@ -100,7 +127,11 @@ async function restateHandler(
   );
 
   // Invoke user workflow
-  return workflowFn(...args);
+  try {
+    return await workflowFn(...args);
+  } catch (err) {
+    rethrowFatalAsTerminal(err);
+  }
 }
 
 function createContext(restateCtx: Context) {
@@ -152,15 +183,19 @@ function createDurableFetch(ctx: WorkflowOrchestratorContext) {
 
     return ctx.restateCtx
       .run(`fetch ${url}`, async (): Promise<SerializedResponse> => {
-        const res = await fetch(input, init);
-        const body = await res.text();
-        return {
-          status: res.status,
-          statusText: res.statusText,
-          headers: [...res.headers.entries()],
-          body,
-          url: res.url,
-        };
+        try {
+          const res = await fetch(input, init);
+          const body = await res.text();
+          return {
+            status: res.status,
+            statusText: res.statusText,
+            headers: [...res.headers.entries()],
+            body,
+            url: res.url,
+          };
+        } catch (err) {
+          rethrowFatalAsTerminal(err);
+        }
       })
       .then((serialized: SerializedResponse) => {
         return new Response(serialized.body, {
@@ -212,7 +247,13 @@ function createUseStep(ctx: WorkflowOrchestratorContext) {
 
       return ctx.restateCtx.run(
         parseStepName(stepName)?.shortName ?? stepName,
-        () => stepFn(...args) as Result
+        async () => {
+          try {
+            return await (stepFn(...args) as Promise<Result>);
+          } catch (err) {
+            rethrowFatalAsTerminal(err);
+          }
+        }
       );
     };
 
