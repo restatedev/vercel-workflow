@@ -180,11 +180,11 @@ function createSleep(ctx: WorkflowOrchestratorContext) {
     } else if (
       typeof param === "object" &&
       param !== null &&
-      typeof (param as Date).getTime === "function"
+      typeof param.getTime === "function"
     ) {
       // Duck-type Date check: VM Date objects have a different prototype
       // than the host Date, so `instanceof Date` fails across contexts.
-      millis = (param as Date).getTime() - Date.now();
+      millis = param.getTime() - Date.now();
     } else if (typeof param === "string") {
       const parsed = ms(param as StringValue);
       if (parsed === undefined) {
