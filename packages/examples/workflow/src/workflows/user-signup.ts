@@ -7,7 +7,10 @@ export async function handleUserSignup(email: string) {
 
   await sendWelcomeEmail({ id: "temp-id", email });
 
+  // Sleep supports three formats: string, milliseconds, and Date
   await sleep("5s");
+  await sleep(3000);
+  await sleep(new Date(Date.now() + 2000));
 
   const hook = createHook<{ message: string }>();
   console.log("Hook token:", hook.token);

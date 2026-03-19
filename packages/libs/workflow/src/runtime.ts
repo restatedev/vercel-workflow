@@ -123,14 +123,22 @@ function createSleep(ctx: WorkflowOrchestratorContext) {
     let millis: number;
     if (typeof param === "number") {
       millis = param;
-    } else if (param instanceof Date) {
-      millis = param.getTime() - Date.now();
-    } else {
+    } else if (
+      typeof param === "object" &&
+      param !== null &&
+      typeof (param as Date).getTime === "function"
+    ) {
+      // Duck-type Date check: VM Date objects have a different prototype
+      // than the host Date, so `instanceof Date` fails across contexts.
+      millis = (param as Date).getTime() - Date.now();
+    } else if (typeof param === "string") {
       const parsed = ms(param as StringValue);
       if (parsed === undefined) {
         throw new Error(`Invalid sleep duration string: ${JSON.stringify(param)}`);
       }
       millis = parsed;
+    } else {
+      throw new Error(`Invalid sleep parameter: ${JSON.stringify(param)}`);
     }
     return ctx.restateCtx.sleep(millis);
   };
