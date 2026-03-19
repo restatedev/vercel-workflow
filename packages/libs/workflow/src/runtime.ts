@@ -9,7 +9,12 @@ import * as serialization from "@workflow/core/serialization";
 import { createContext as vmCreateContext, runInContext } from "node:vm";
 import { parseStepName } from "./parse-name.js";
 import { globalStepRegistry } from "./internal/private.js";
-import { WORKFLOW_USE_STEP, WORKFLOW_CREATE_HOOK } from "./symbols.js";
+import {
+  WORKFLOW_USE_STEP,
+  WORKFLOW_CREATE_HOOK,
+  WORKFLOW_SLEEP,
+} from "./symbols.js";
+import ms, { type StringValue } from "ms";
 import { Hook, HookOptions } from "@workflow/core";
 
 export function workflowEntrypoint(workflowCode: string) {
@@ -48,11 +53,14 @@ async function restateHandler(
 
   const useStep = createUseStep(workflowContext);
   const createHook = createCreateHook(workflowContext);
+  const sleep = createSleep(workflowContext);
 
   // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
   vmGlobalThis[WORKFLOW_USE_STEP] = useStep;
   // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
   vmGlobalThis[WORKFLOW_CREATE_HOOK] = createHook;
+  // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
+  vmGlobalThis[WORKFLOW_SLEEP] = sleep;
 
   // Execute the workflow code to populate globalThis.__private_workflows,
   // then retrieve the first registered workflow function.
@@ -107,6 +115,24 @@ function createContext(restateCtx: Context) {
   return {
     context,
     globalThis: g,
+  };
+}
+
+function createSleep(ctx: WorkflowOrchestratorContext) {
+  return function sleep(param: number | Date | string): Promise<void> {
+    let millis: number;
+    if (typeof param === "number") {
+      millis = param;
+    } else if (param instanceof Date) {
+      millis = param.getTime() - Date.now();
+    } else {
+      const parsed = ms(param as StringValue);
+      if (parsed === undefined) {
+        throw new Error(`Invalid sleep duration string: ${JSON.stringify(param)}`);
+      }
+      millis = parsed;
+    }
+    return ctx.restateCtx.sleep(millis);
   };
 }
 

@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/require-await */
 
-import { createHook } from "workflow";
+import { createHook, sleep } from "workflow";
 
 export async function handleUserSignup(email: string) {
   "use workflow";
 
   await sendWelcomeEmail({ id: "temp-id", email });
+
+  await sleep("5s");
 
   const hook = createHook<{ message: string }>();
   console.log("Hook token:", hook.token);
