@@ -54,6 +54,7 @@ async function restateHandler(
   const useStep = createUseStep(workflowContext);
   const createHook = createCreateHook(workflowContext);
   const sleep = createSleep(workflowContext);
+  const durableFetch = createDurableFetch(workflowContext);
 
   // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
   vmGlobalThis[WORKFLOW_USE_STEP] = useStep;
@@ -61,6 +62,9 @@ async function restateHandler(
   vmGlobalThis[WORKFLOW_CREATE_HOOK] = createHook;
   // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
   vmGlobalThis[WORKFLOW_SLEEP] = sleep;
+
+  // Replace the disabled global fetch with the durable version
+  vmGlobalThis.fetch = durableFetch;
 
   // Execute the workflow code to populate globalThis.__private_workflows,
   // then retrieve the first registered workflow function.
@@ -107,6 +111,13 @@ function createContext(restateCtx: Context) {
   // Hook console
   g.console = restateCtx.console;
 
+  // Disable global fetch — workflow code must use the durable fetch injected later
+  g.fetch = () => {
+    throw new Error(
+      'Global "fetch" is unavailable in workflow functions. It will be replaced with a durable version at runtime.'
+    );
+  };
+
   // HACK: Shim `exports` for the bundle
   // TODO(slinkydeveloper) seems important, need to figure out why
   g.exports = {};
@@ -115,6 +126,49 @@ function createContext(restateCtx: Context) {
   return {
     context,
     globalThis: g,
+  };
+}
+
+type SerializedResponse = {
+  status: number;
+  statusText: string;
+  headers: [string, string][];
+  body: string;
+  url: string;
+};
+
+function createDurableFetch(ctx: WorkflowOrchestratorContext) {
+  return function durableFetch(
+    input: string | URL | Request,
+    init?: RequestInit
+  ): Promise<Response> {
+    // Derive a human-readable name for the journal entry
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+
+    return ctx.restateCtx
+      .run(`fetch ${url}`, async (): Promise<SerializedResponse> => {
+        const res = await fetch(input, init);
+        const body = await res.text();
+        return {
+          status: res.status,
+          statusText: res.statusText,
+          headers: [...res.headers.entries()],
+          body,
+          url: res.url,
+        };
+      })
+      .then((serialized: SerializedResponse) => {
+        return new Response(serialized.body, {
+          status: serialized.status,
+          statusText: serialized.statusText,
+          headers: new Headers(serialized.headers),
+        });
+      });
   };
 }
 
