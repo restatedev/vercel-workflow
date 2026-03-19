@@ -188,7 +188,9 @@ function createSleep(ctx: WorkflowOrchestratorContext) {
     } else if (typeof param === "string") {
       const parsed = ms(param as StringValue);
       if (parsed === undefined) {
-        throw new Error(`Invalid sleep duration string: ${JSON.stringify(param)}`);
+        throw new Error(
+          `Invalid sleep duration string: ${JSON.stringify(param)}`
+        );
       }
       millis = parsed;
     } else {
