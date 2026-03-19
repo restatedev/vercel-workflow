@@ -1,5 +1,5 @@
 {
-  "name": "@restatedev/vercel-world",
+  "name": "@restatedev/workflow",
   "version": "0.0.0",
   "description": "Vercel Workflow World implementation using Restate SDK",
   "author": "Restate Developers",
@@ -22,6 +22,14 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./internal/private": {
+      "import": "./dist/internal/private.js",
+      "require": "./dist/internal/private.cjs"
+    },
+    "./runtime": {
+      "import": "./dist/runtime.js",
+      "require": "./dist/runtime.cjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -42,15 +50,16 @@
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint .",
     "check:exports": "turbo run _check:exports --filter={.}...",
-    "_check:exports": "attw --pack .",
+    "_check:exports": "attw --pack . --profile node16",
     "check:api": "turbo run _check:api --filter={.}...",
     "_check:api": "api-extractor run --local",
     "prepublishOnly": "pnpm -w verify"
   },
   "peerDependencies": {
     "@workflow/world": "catalog:",
+    "@workflow/core": "catalog:",
     "@workflow/errors": "catalog:",
-    "@restatedev/restate-sdk-clients": "catalog:",
+    "@restatedev/restate-sdk": "catalog:",
     "@restatedev/restate-sdk-zod": "catalog:",
     "@restatedev/pubsub-client": "catalog:",
     "@vercel/queue": "catalog:",
@@ -58,8 +67,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@restatedev/common": "workspace:*",
-    "@restatedev/vercel-backend": "workspace:*",
     "@workflow/world": "catalog:",
     "@workflow/errors": "catalog:",
     "@restatedev/restate-sdk-clients": "catalog:",
