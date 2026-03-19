@@ -50,7 +50,7 @@
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint .",
     "check:exports": "turbo run _check:exports --filter={.}...",
-    "_check:exports": "attw --pack .",
+    "_check:exports": "attw --pack . --profile node16",
     "check:api": "turbo run _check:api --filter={.}...",
     "_check:api": "api-extractor run --local",
     "prepublishOnly": "pnpm -w verify"
