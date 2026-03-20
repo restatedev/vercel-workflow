@@ -8,12 +8,13 @@ import {
 } from "@restatedev/restate-sdk/fetch";
 import * as serialization from "@workflow/core/serialization";
 import { createContext as vmCreateContext, runInContext } from "node:vm";
-import { parseStepName } from "./parse-name.js";
+import { parseStepName, parseWorkflowName } from "./parse-name.js";
 import { globalStepRegistry } from "./internal/private.js";
 import {
   WORKFLOW_USE_STEP,
   WORKFLOW_CREATE_HOOK,
   WORKFLOW_SLEEP,
+  WORKFLOW_CONTEXT,
 } from "./symbols.js";
 import ms, { type StringValue } from "ms";
 import { Hook, HookOptions } from "@workflow/core";
@@ -52,9 +53,28 @@ export function workflowEntrypoint(workflowCode: string) {
 
 export function stepEntrypoint() {}
 
+/**
+ * TODO: this is a hack, find better solution
+ * Extract the Restate service name from the bundled workflow code.
+ * The bundle contains: __private_workflows.set("workflow//path//FunctionName", ...)
+ */
+function extractServiceName(workflowCode: string): string {
+  const match = workflowCode.match(
+    /__private_workflows\.set\("(workflow\/\/[^"]+)"/
+  );
+  if (!match) {
+    throw new Error(
+      "Could not extract workflow name from bundled workflow code"
+    );
+  }
+  const workflowId = match[1]!;
+  return parseWorkflowName(workflowId)?.shortName ?? workflowId;
+}
+
 function createService(workflowCode: string) {
+  const serviceName = extractServiceName(workflowCode);
   return service({
-    name: "handleUserSignup",
+    name: serviceName,
     handlers: {
       run: (ctx, input) => restateHandler(ctx, workflowCode, input),
     },
@@ -108,12 +128,34 @@ async function restateHandler(
     );
   }
 
-  const [workflowName, workflowFn] = firstEntry;
+  const [workflowId, workflowFn] = firstEntry;
+  const serviceName = parseWorkflowName(workflowId)?.shortName ?? workflowId;
+
+  // Set workflow metadata after we know the workflow name.
+  // Getters are lazy so they're safe to read after this point.
+  const startTime = await restateCtx.date.now();
+  // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
+  vmGlobalThis[WORKFLOW_CONTEXT] = {
+    workflowRunId: restateCtx.request().id,
+    workflowName: serviceName,
+    get workflowStartedAt() {
+      return startTime;
+    },
+    get url(): string {
+      const ingress = process.env["RESTATE_INGRESS"];
+      if (!ingress) {
+        throw new TerminalError(
+          "Cannot retrieve workflow submission url. Please set RESTATE_INGRESS env var."
+        );
+      }
+      return `${ingress.replace(/\/+$/, "")}/${serviceName}/run`;
+    },
+  };
 
   if (typeof workflowFn !== "function") {
     throw new ReferenceError(
       `Workflow ${JSON.stringify(
-        workflowName
+        workflowId
       )} must be a function, but got "${typeof workflowFn}" instead`
     );
   }

@@ -1,9 +1,11 @@
 /* eslint-disable @typescript-eslint/require-await */
 
-import { createHook, sleep } from "workflow";
+import { createHook, getWorkflowMetadata, sleep } from "workflow";
 
-export async function handleUserSignup(email: string) {
+export async function handleSignup(email: string) {
   "use workflow";
+
+  console.info(JSON.stringify(getWorkflowMetadata()))
 
   // Durable step
   await sendWelcomeEmail({ id: "temp-id", email });
@@ -32,12 +34,14 @@ async function sendWelcomeEmail(user: { id: string; email: string }) {
 
   console.log(`Sending welcome email to user: ${user.id}, email ${user.email}`);
 
-  if (Math.random() < 0.7) {
-    // By default, steps will be retried for unhandled errors
-    throw new Error("[SIMULATED] Email sending failed!");
+  // console.info(JSON.stringify(getStepMetadata()))
 
-    // or throw a fatal error that gets translated to a terminal error
-    // throw new FatalError("Simulated error");
-
-  }
+  // if (Math.random() < 0.7) {
+  //   // By default, steps will be retried for unhandled errors
+  //   throw new Error("[SIMULATED] Email sending failed!");
+  //
+  //   // or throw a fatal error that gets translated to a terminal error
+  //   // throw new FatalError("Simulated error");
+  //
+  // }
 }
