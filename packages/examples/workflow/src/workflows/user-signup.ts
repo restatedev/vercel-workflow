@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await */
 
-import { createHook, FatalError, sleep } from "workflow";
+import { createHook, sleep } from "workflow";
 
 export async function handleUserSignup(email: string) {
   "use workflow";
