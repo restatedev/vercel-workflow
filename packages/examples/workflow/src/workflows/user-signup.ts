@@ -1,6 +1,13 @@
 /* eslint-disable @typescript-eslint/require-await */
 
-import { createHook, getWorkflowMetadata, sleep } from "workflow";
+import { createHook, defineHook, getWorkflowMetadata, sleep } from "workflow";
+
+// Define a typed hook — the same definition is used both inside the workflow
+// (.create()) and from API routes (.resume()) for end-to-end type safety.
+export const approvalHook = defineHook<{
+  approved: boolean;
+  comment: string;
+}>();
 
 export async function handleSignup(email: string) {
   "use workflow";
@@ -20,11 +27,17 @@ export async function handleSignup(email: string) {
   await sleep(3000);
   await sleep(new Date(Date.now() + 2000));
 
-  // Durable hooks
+  // Durable hooks — using createHook directly
   const hook = createHook<{ message: string }>();
   console.log("Hook token:", hook.token);
   const payload = await hook;
   console.log("Received:", payload.message);
+
+  // Typed hooks — using defineHook for type-safe creation and resumption
+  const approval = approvalHook.create();
+  console.log("Approval hook token:", approval.token);
+  const approvalResult = await approval;
+  console.log("Approved:", approvalResult.approved, "Comment:", approvalResult.comment);
 
   return { userId: "temp-id", status: "onboarded" };
 }
