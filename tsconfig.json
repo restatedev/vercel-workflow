@@ -4,7 +4,8 @@
     "composite": false,
     "baseUrl": ".",
     "paths": {
-      "@restatedev/workflow": ["packages/libs/workflow/src/index.ts"]
+      "@restatedev/workflow": ["packages/libs/workflow/src/index.ts"],
+      "workflow/api": ["packages/libs/workflow/src/index.ts"]
     }
   },
   "files": [],

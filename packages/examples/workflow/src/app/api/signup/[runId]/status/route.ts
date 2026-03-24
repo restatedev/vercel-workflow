@@ -9,24 +9,6 @@
  * TODO: Add repository URL
  */
 
-import { NextResponse, NextRequest } from "next/server.js";
-import { getRun } from "workflow/api";
-
-type RouteParams = {
-  params: Promise<{
-    runId: string;
-  }>;
-};
-
-export async function GET(_request: NextRequest, { params }: RouteParams) {
-  const { runId } = await params;
-  const run = getRun(runId);
-  return new NextResponse(run.getReadable({ startIndex: 0 }), {
-    status: 200,
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  });
-}
+// TODO: Implement streaming support (getReadable / getWritable)
+// This route previously used Vercel's run.getReadable() for SSE streaming,
+// which is not yet supported by the Restate workflow implementation.
