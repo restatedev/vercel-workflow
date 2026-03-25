@@ -9,8 +9,11 @@
  * TODO: Add repository URL
  */
 
+import * as clients from "@restatedev/restate-sdk-clients";
 import * as serialization from "@workflow/core/serialization";
 import { parseWorkflowName } from "./parse-name.js";
+import { workflowRunObj, hookObj } from "./runtime.js";
+import type { WorkflowRunData } from "./runtime.js";
 import type {
   World,
   WorkflowRun,
@@ -42,67 +45,8 @@ function getAdminUrl(): string {
 }
 
 // ---------------------------------------------------------------------------
-// Durable metadata store — backed by the workflowRunMetadata virtual object
-// in runtime.ts. Survives crashes.
-// ---------------------------------------------------------------------------
-
-interface StoredMetadata {
-  workflowName: string;
-  invocationId: string;
-  createdAt: number;
-}
-
-async function storeMetadata(
-  runId: string,
-  workflowName: string,
-  invocationId: string
-): Promise<void> {
-  const ingress = getIngressUrl();
-  await fetch(
-    `${ingress}/workflowRunMetadata/${encodeURIComponent(runId)}/store/send`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ workflowName, invocationId }),
-    }
-  );
-}
-
-async function getMetadata(
-  runId: string
-): Promise<StoredMetadata | null> {
-  const ingress = getIngressUrl();
-  const res = await fetch(
-    `${ingress}/workflowRunMetadata/${encodeURIComponent(runId)}/get`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" }
-    }
-  );
-  if (!res.ok) return null;
-  return (await res.json()) as StoredMetadata | null;
-}
-
-// ---------------------------------------------------------------------------
-// In-memory cache for serialized input (only needed between events.create
-// and queue() within the same start() call — not durable)
-// ---------------------------------------------------------------------------
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const inputCache = new Map<string, any[]>();
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function workflowNameFromQueue(queueName: string): string {
-  const prefix = "__wkf_workflow_";
-  const workflowId = queueName.startsWith(prefix)
-    ? queueName.slice(prefix.length)
-    : queueName;
-
-  return parseWorkflowName(workflowId)?.shortName ?? workflowId;
-}
 
 function makeRun(
   runId: string,
@@ -137,6 +81,7 @@ function notImplemented(name: string): (...args: unknown[]) => never {
 
 export function createWorld(): World {
   const ingress = getIngressUrl();
+  const restate = clients.connect({ url: ingress });
 
   return {
     // ------ Queue ------
@@ -146,70 +91,22 @@ export function createWorld(): World {
     },
 
     async queue(
-      queueName: ValidQueueName,
+      _queueName: ValidQueueName,
       message: QueuePayload,
       opts?: QueueOptions
     ) {
       const payload = message as { runId: string };
-      const cachedInput = inputCache.get(payload.runId);
-      if (!cachedInput) {
-        throw new Error(
-          `Cannot queue: serialized input for run ${payload.runId} not found`
-        );
-      }
 
-      const serviceName = workflowNameFromQueue(queueName);
+      // Submit the workflow run — the workflowRun virtual object
+      // already has the input stored from events.create.
+      const { invocationId } = await restate
+        .objectClient(workflowRunObj, payload.runId)
+        .submit({
+          idempotencyKey: opts?.idempotencyKey,
+          delaySeconds: opts?.delaySeconds,
+        });
 
-      // The input was serialized by Vercel's dehydrateWorkflowArguments (binary).
-      // Deserialize it back to raw args so we can send JSON to Restate.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const rawArgs: unknown[] =
-        await serialization.hydrateWorkflowArguments(
-          cachedInput,
-          payload.runId,
-          undefined,
-          globalThis
-        );
-
-      const headers: Record<string, string> = {
-        ...opts?.headers,
-        "Content-Type": "application/json",
-      };
-      if (opts?.idempotencyKey) {
-        headers["idempotency-key"] = opts.idempotencyKey;
-      }
-
-      let url = `${ingress}/${encodeURIComponent(serviceName)}/run/send`;
-      if (opts?.delaySeconds) {
-        url += `?delay=${opts.delaySeconds}s`;
-      }
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({serviceName, payload: JSON.stringify(rawArgs[0])}),
-      });
-
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw new Error(
-          `Failed to start workflow "${serviceName}": ${res.status}${body ? ` - ${body}` : ""}`
-        );
-      }
-
-      const data = (await res.json()) as { invocationId: string };
-
-      // Store the mapping durably in the virtual object
-      await storeMetadata(
-        payload.runId,
-        workflowNameFromQueue(queueName),
-        data.invocationId
-      );
-
-      // Clean up the transient input cache
-      inputCache.delete(payload.runId);
-
-      return { messageId: data.invocationId as MessageId };
+      return { messageId: invocationId as MessageId };
     },
 
     createQueueHandler() {
@@ -222,9 +119,11 @@ export function createWorld(): World {
 
     runs: {
       async get(id: string): Promise<WorkflowRun> {
-        const meta = await getMetadata(id);
-        if (!meta) {
-          // Return a minimal run for hook resolution (runId="restate" placeholder)
+        const data: WorkflowRunData | null = await restate
+          .objectClient(workflowRunObj, id)
+          .get();
+
+        if (!data) {
           return {
             runId: id,
             deploymentId: "restate",
@@ -239,12 +138,20 @@ export function createWorld(): World {
           } as WorkflowRun;
         }
 
+        const createdAt = new Date(data.createdAt);
+
+        // Not yet submitted (e.g., delayed start)
+        if (!data.invocationId) {
+          return makeRun(id, data.workflowName, createdAt, {
+            status: "pending",
+          });
+        }
+
+        // Query Restate for invocation output
         const res = await fetch(
-          `${ingress}/restate/invocation/${encodeURIComponent(meta.invocationId)}/output`,
+          `${ingress}/restate/invocation/${encodeURIComponent(data.invocationId)}/output`,
           { headers: { Accept: "application/json" } }
         );
-
-        const createdAt = new Date(meta.createdAt);
 
         if (res.ok) {
           const rawOutput: unknown = await res.json();
@@ -255,7 +162,7 @@ export function createWorld(): World {
             undefined,
             globalThis
           );
-          return makeRun(id, meta.workflowName, createdAt, {
+          return makeRun(id, data.workflowName, createdAt, {
             status: "completed",
             output,
             completedAt: new Date(),
@@ -263,13 +170,13 @@ export function createWorld(): World {
         }
 
         if (res.status === 470) {
-          return makeRun(id, meta.workflowName, createdAt, {
+          return makeRun(id, data.workflowName, createdAt, {
             status: "running",
           });
         }
 
         const errorText = await res.text().catch(() => "");
-        return makeRun(id, meta.workflowName, createdAt, {
+        return makeRun(id, data.workflowName, createdAt, {
           status: "failed",
           error: { message: errorText || "Workflow failed" },
           completedAt: new Date(),
@@ -300,8 +207,26 @@ export function createWorld(): World {
             }
           ).eventData;
 
-          // Cache the serialized input for queue() to pick up
-          inputCache.set(runId!, eventData.input);
+          const serviceName = parseWorkflowName(eventData.workflowName)?.shortName ?? eventData.workflowName;
+
+          // Deserialize input from Vercel's binary format to raw JSON
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+          const rawArgs: unknown[] =
+            await serialization.hydrateWorkflowArguments(
+              eventData.input,
+              runId!,
+              undefined,
+              globalThis
+            );
+
+          // Create the workflow run object — stores input durably in Restate
+          await restate
+            .objectSendClient(workflowRunObj, runId!)
+            .create({
+              workflowName: eventData.workflowName,
+              serviceName,
+              input: JSON.stringify(rawArgs[0]),
+            });
 
           const now = new Date();
           return {
@@ -331,32 +256,30 @@ export function createWorld(): World {
           );
           // Forward to Restate's workflowHooks virtual object
           const token = eventData.correlationId;
-          await fetch(
-            `${ingress}/workflowHooks/${encodeURIComponent(token)}/resolve`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(rawPayload),
-            }
-          );
+          await restate
+            .objectClient(hookObj, token)
+            .resolve(rawPayload);
           return {};
         }
 
         if (eventType === "run_cancelled" && runId) {
-          const meta = await getMetadata(runId);
-          if (meta?.invocationId) {
+          const data: WorkflowRunData | null = await restate
+            .objectClient(workflowRunObj, runId)
+            .get();
+
+          if (data?.invocationId) {
             const admin = getAdminUrl();
             await fetch(
-              `${admin}/invocations/${encodeURIComponent(meta.invocationId)}`,
+              `${admin}/invocations/${encodeURIComponent(data.invocationId)}`,
               { method: "DELETE" }
             );
           }
-          if (meta) {
+          if (data) {
             return {
               run: makeRun(
                 runId,
-                meta.workflowName,
-                new Date(meta.createdAt),
+                data.workflowName,
+                new Date(data.createdAt),
                 { status: "cancelled", completedAt: new Date() }
               ),
             };

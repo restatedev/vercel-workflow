@@ -1,10 +1,13 @@
 import {
   Context,
   createEndpointHandler,
+  handlers,
   object,
   ObjectContext,
+  ObjectSharedContext,
   service,
   TerminalError,
+  serde
 } from "@restatedev/restate-sdk/fetch";
 import * as serialization from "@workflow/core/serialization";
 import { createContext as vmCreateContext, runInContext } from "node:vm";
@@ -47,44 +50,74 @@ function rethrowFatalAsTerminal(err: unknown): never {
 
 export function workflowEntrypoint(workflowCode: string) {
   return createEndpointHandler({
-    services: [createService(workflowCode), hookObj, runMetadataObj],
+    services: [createService(workflowCode), hookObj, workflowRunObj],
   });
 }
 
 // ---------------------------------------------------------------------------
-// runMetadata — durable store for the mapping from Vercel runId to
-// Restate invocationId + workflow metadata.
+// workflowRun — virtual object representing a workflow run lifecycle.
+// Keyed by Vercel runId. Stores input, starts the workflow, tracks invocation.
 // ---------------------------------------------------------------------------
 
-type RunMetadataState = {
+export interface WorkflowRunData {
   workflowName: string;
-  invocationId: string;
+  serviceName: string;
+  input: string;
+  invocationId: string | null;
   createdAt: number;
-};
+}
 
-const runMetadataObj = object({
-  name: "workflowRunMetadata",
+type WorkflowRunState = { data: WorkflowRunData };
+
+export const workflowRunObj = object({
+  name: "workflowRun",
   handlers: {
-    // eslint-disable-next-line @typescript-eslint/require-await
-    store: async (
-      ctx: ObjectContext<RunMetadataState>,
-      input: { workflowName: string; invocationId: string }
+    create: async (
+      ctx: ObjectContext<WorkflowRunState>,
+      input: { workflowName: string; serviceName: string; input: string }
     ) => {
-      ctx.set("workflowName", input.workflowName);
-      ctx.set("invocationId", input.invocationId);
-      // TODO FIX: we shouldnt be setting the date here. We already do this in the handler
-      ctx.set("createdAt", await ctx.date.now());
+      ctx.set("data", {
+        workflowName: input.workflowName,
+        serviceName: input.serviceName,
+        input: input.input,
+        invocationId: null,
+        createdAt: await ctx.date.now(),
+      });
     },
 
-    get: async (ctx: ObjectContext<RunMetadataState>) => {
-      const invocationId = await ctx.get("invocationId");
-      if (!invocationId) return null;
-      return {
-        workflowName: await ctx.get("workflowName"),
-        invocationId,
-        createdAt: await ctx.get("createdAt"),
-      };
+    submit: async (
+      ctx: ObjectContext<WorkflowRunState>,
+      input: { idempotencyKey?: string; delaySeconds?: number }
+    ) => {
+      const data = await ctx.get("data");
+      if (!data) {
+        throw new TerminalError(
+          `workflowRun/${ctx.key}/submit: missing state — create was not called.`
+        );
+      }
+
+      // Idempotent: skip if already submitted
+      if (data.invocationId) return { invocationId: data.invocationId };
+
+      const handle = ctx.genericSend({
+        service: data.serviceName,
+        method: "run",
+        parameter: { serviceName: data.serviceName, payload: data.input, runId: ctx.key, workflowName: data.workflowName },
+        inputSerde: serde.json,
+        ...(input.delaySeconds ? { delay: input.delaySeconds * 1000 } : {}),
+        ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
+      });
+
+      const invocationId = (await handle.invocationId).toString();
+      ctx.set("data", { ...data, invocationId });
+      return { invocationId };
     },
+
+    get: handlers.object.shared(
+      async (ctx: ObjectSharedContext<WorkflowRunState>) => {
+        return await ctx.get("data");
+      }
+    ),
   },
 });
 
@@ -113,7 +146,7 @@ function createService(workflowCode: string) {
   return service({
     name: serviceName,
     handlers: {
-      run: (ctx, {serviceName, payload}: {serviceName: string, payload: string}) => restateHandler(ctx, workflowCode, serviceName, payload),
+      run: (ctx, {serviceName, payload, runId, workflowName}: {serviceName: string, payload: string, runId: string, workflowName: string}) => restateHandler(ctx, workflowCode, serviceName, payload, runId, workflowName),
     },
   });
 }
@@ -127,7 +160,9 @@ async function restateHandler(
   restateCtx: Context,
   workflowCode: string,
   serviceName: string,
-  payload: string
+  payload: string,
+  runId: string,
+  workflowName: string,
 ) {
   const { context, globalThis: vmGlobalThis } = createContext(restateCtx);
 
@@ -160,8 +195,8 @@ async function restateHandler(
   const startTime = await restateCtx.date.now();
   // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
   vmGlobalThis[WORKFLOW_CONTEXT] = {
-    workflowRunId: restateCtx.request().id,
-    workflowName: serviceName,
+    workflowRunId: runId,
+    workflowName: workflowName,
     get workflowStartedAt() {
       return startTime;
     },
@@ -186,29 +221,11 @@ async function restateHandler(
     );
   }
 
-  // Find the workflow entry whose key ends with /<serviceName>
-  let workflowId: string | undefined;
-  let workflowFn: ((...args: unknown[]) => unknown) | undefined;
-  for (const [key, value] of workflowsMap.entries()) {
-    if (key.endsWith(`/${serviceName}`)) {
-      workflowId = key;
-      workflowFn = value;
-      break;
-    }
-  }
-
-  if (!workflowFn || !workflowId) {
+  const workflowFn = workflowsMap.get(workflowName);
+  if (typeof workflowFn !== "function") {
     const available = [...workflowsMap.keys()].join(", ");
     throw new ReferenceError(
-      `Could not find workflow ending for "${serviceName}" in workflowsMap. Available: ${available}`
-    );
-  }
-
-  if (typeof workflowFn !== "function") {
-    throw new ReferenceError(
-      `Workflow ${JSON.stringify(
-        workflowId
-      )} must be a function, but got "${typeof workflowFn}" instead`
+      `Could not find workflow "${workflowName}" in workflowsMap. Available: ${available}`
     );
   }
 
@@ -428,7 +445,7 @@ type HooksState = {
   subscribers: string[];
 };
 
-const hookObj = object({
+export const hookObj = object({
   name: "workflowHooks",
   handlers: {
     createAndSubscribe: async (
