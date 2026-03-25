@@ -18,6 +18,7 @@ import type {
   QueuePayload,
   ValidQueueName,
   MessageId,
+  QueueOptions,
 } from "@workflow/world";
 
 // ---------------------------------------------------------------------------
@@ -75,8 +76,7 @@ async function getMetadata(
     `${ingress}/workflowRunMetadata/${encodeURIComponent(runId)}/get`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "null",
+      headers: { "Content-Type": "application/json" }
     }
   );
   if (!res.ok) return null;
@@ -148,7 +148,7 @@ export function createWorld(): World {
     async queue(
       queueName: ValidQueueName,
       message: QueuePayload,
-      _opts?: { deploymentId?: string; idempotencyKey?: string }
+      opts?: QueueOptions
     ) {
       const payload = message as { runId: string };
       const cachedInput = inputCache.get(payload.runId);
@@ -171,14 +171,24 @@ export function createWorld(): World {
           globalThis
         );
 
-      const res = await fetch(
-        `${ingress}/${encodeURIComponent(serviceName)}/run/send`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(rawArgs[0]),
-        }
-      );
+      const headers: Record<string, string> = {
+        ...opts?.headers,
+        "Content-Type": "application/json",
+      };
+      if (opts?.idempotencyKey) {
+        headers["idempotency-key"] = opts.idempotencyKey;
+      }
+
+      let url = `${ingress}/${encodeURIComponent(serviceName)}/run/send`;
+      if (opts?.delaySeconds) {
+        url += `?delay=${opts.delaySeconds}s`;
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({serviceName, payload: JSON.stringify(rawArgs[0])}),
+      });
 
       if (!res.ok) {
         const body = await res.text().catch(() => "");
@@ -237,7 +247,14 @@ export function createWorld(): World {
         const createdAt = new Date(meta.createdAt);
 
         if (res.ok) {
-          const output: unknown = await res.json();
+          const rawOutput: unknown = await res.json();
+          // Serialize in Vercel's format so hydrateWorkflowReturnValue can read it
+          const output = await serialization.dehydrateWorkflowReturnValue(
+            rawOutput,
+            id,
+            undefined,
+            globalThis
+          );
           return makeRun(id, meta.workflowName, createdAt, {
             status: "completed",
             output,

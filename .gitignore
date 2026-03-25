@@ -9,3 +9,4 @@ dist
 .restate
 restatedev-workflow*
 .idea
+package/*

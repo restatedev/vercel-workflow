@@ -72,7 +72,8 @@ const runMetadataObj = object({
     ) => {
       ctx.set("workflowName", input.workflowName);
       ctx.set("invocationId", input.invocationId);
-      ctx.set("createdAt", Date.now());
+      // TODO FIX: we shouldnt be setting the date here. We already do this in the handler
+      ctx.set("createdAt", await ctx.date.now());
     },
 
     get: async (ctx: ObjectContext<RunMetadataState>) => {
@@ -112,7 +113,7 @@ function createService(workflowCode: string) {
   return service({
     name: serviceName,
     handlers: {
-      run: (ctx, input) => restateHandler(ctx, workflowCode, input),
+      run: (ctx, {serviceName, payload}: {serviceName: string, payload: string}) => restateHandler(ctx, workflowCode, serviceName, payload),
     },
   });
 }
@@ -125,7 +126,8 @@ interface WorkflowOrchestratorContext {
 async function restateHandler(
   restateCtx: Context,
   workflowCode: string,
-  input: unknown
+  serviceName: string,
+  payload: string
 ) {
   const { context, globalThis: vmGlobalThis } = createContext(restateCtx);
 
@@ -153,20 +155,6 @@ async function restateHandler(
   // then retrieve the first registered workflow function.
   runInContext(workflowCode, context);
 
-  const workflowsMap = vmGlobalThis.__private_workflows as
-    | Map<string, (...args: unknown[]) => unknown>
-    | undefined;
-  const firstEntry = workflowsMap?.entries().next().value;
-
-  if (!firstEntry) {
-    throw new ReferenceError(
-      "No workflows registered. The workflow code did not set globalThis.__private_workflows."
-    );
-  }
-
-  const [workflowId, workflowFn] = firstEntry;
-  const serviceName = parseWorkflowName(workflowId)?.shortName ?? workflowId;
-
   // Set workflow metadata after we know the workflow name.
   // Getters are lazy so they're safe to read after this point.
   const startTime = await restateCtx.date.now();
@@ -188,6 +176,34 @@ async function restateHandler(
     },
   };
 
+  const workflowsMap = vmGlobalThis.__private_workflows as
+    | Map<string, (...args: unknown[]) => unknown>
+    | undefined;
+
+  if (!workflowsMap || workflowsMap.size === 0) {
+    throw new ReferenceError(
+      "No workflows registered. The workflow code did not set globalThis.__private_workflows."
+    );
+  }
+
+  // Find the workflow entry whose key ends with /<serviceName>
+  let workflowId: string | undefined;
+  let workflowFn: ((...args: unknown[]) => unknown) | undefined;
+  for (const [key, value] of workflowsMap.entries()) {
+    if (key.endsWith(`/${serviceName}`)) {
+      workflowId = key;
+      workflowFn = value;
+      break;
+    }
+  }
+
+  if (!workflowFn || !workflowId) {
+    const available = [...workflowsMap.keys()].join(", ");
+    throw new ReferenceError(
+      `Could not find workflow ending for "${serviceName}" in workflowsMap. Available: ${available}`
+    );
+  }
+
   if (typeof workflowFn !== "function") {
     throw new ReferenceError(
       `Workflow ${JSON.stringify(
@@ -198,12 +214,12 @@ async function restateHandler(
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const hydrated = await serialization.hydrateWorkflowArguments(
-    [input],
+    [payload],
     restateCtx.request().id,
     undefined,
     vmGlobalThis
   );
-  const args: unknown[] = Array.isArray(hydrated) ? hydrated : [input];
+  const args: unknown[] = Array.isArray(hydrated) ? hydrated : [payload];
 
   // Invoke user workflow
   try {

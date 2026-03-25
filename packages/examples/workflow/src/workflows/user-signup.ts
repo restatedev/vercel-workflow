@@ -12,8 +12,6 @@ export const approvalHook = defineHook<{
 export async function handleSignup(email: string) {
   "use workflow";
 
-  console.info(JSON.stringify(getWorkflowMetadata()))
-
   // Durable step
   await sendWelcomeEmail({ id: "temp-id", email });
 

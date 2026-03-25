@@ -7,8 +7,10 @@ export async function POST(request: Request) {
 
   const run = await start(handleSignup, [email]);
 
+  const result = await run.returnValue
+
   return NextResponse.json({
     message: "User signup workflow started",
-    runId: run.runId,
+    result: result,
   });
 }
