@@ -30,6 +30,10 @@
       "import": "./dist/runtime.js",
       "require": "./dist/runtime.cjs"
     },
+    "./world": {
+      "import": "./dist/world.js",
+      "require": "./dist/world.cjs"
+    },
     "./package.json": "./package.json"
   },
   "files": [

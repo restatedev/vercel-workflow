@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 #
-# Test the full Run lifecycle: start → status → cancel → restart → complete
+# Test the full Run lifecycle: start → status → cancel → complete with hooks
 #
 # Prerequisites:
 #   1. Restate running (docker-compose up -d runtime)
-#   2. Example app running (pnpm examples:dev)
+#   2. Example app running with:
+#        WORKFLOW_TARGET_WORLD=@restatedev/workflow/world \
+#        RESTATE_INGRESS=http://localhost:8080 \
+#        RESTATE_ADMIN_URL=http://localhost:9070 \
+#        pnpm examples:dev
 #   3. Endpoint registered with Restate
 #
 # Usage: ./test-flow.sh [app_url] [restate_ingress]
@@ -16,7 +20,6 @@ INGRESS=${2:-http://localhost:8080}
 
 blue()  { printf "\033[1;34m%s\033[0m\n" "$*"; }
 green() { printf "\033[1;32m%s\033[0m\n" "$*"; }
-red()   { printf "\033[1;31m%s\033[0m\n" "$*"; }
 
 # ---------- 1. Start a workflow ----------
 blue "=== 1. Starting workflow ==="
@@ -32,41 +35,23 @@ sleep 1
 
 # ---------- 2. Check status (should be running) ----------
 blue "=== 2. Checking status (expect: running) ==="
-STATUS_RESPONSE=$(curl -s "$APP/api/signup/$RUN_ID")
-echo "$STATUS_RESPONSE"
+curl -s "$APP/api/signup/$RUN_ID"
+echo
 
 # ---------- 3. Cancel the workflow ----------
 blue "=== 3. Cancelling workflow ==="
-CANCEL_RESPONSE=$(curl -s -X DELETE "$APP/api/signup/$RUN_ID")
-echo "$CANCEL_RESPONSE"
+curl -s -X DELETE "$APP/api/signup/$RUN_ID"
+echo
 
 sleep 1
 
 # ---------- 4. Verify cancelled status ----------
-blue "=== 4. Checking status after cancel (expect: cancelled) ==="
-STATUS_RESPONSE=$(curl -s "$APP/api/signup/$RUN_ID")
-echo "$STATUS_RESPONSE"
+blue "=== 4. Checking status after cancel ==="
+curl -s "$APP/api/signup/$RUN_ID"
+echo
 
-# ---------- 5. Restart the workflow ----------
-blue "=== 5. Restarting workflow ==="
-RESTART_RESPONSE=$(curl -s -X POST "$APP/api/signup/$RUN_ID/restart")
-echo "$RESTART_RESPONSE"
-
-sleep 1
-
-# ---------- 6. Check status again (should be running) ----------
-blue "=== 6. Checking status after restart (expect: running) ==="
-STATUS_RESPONSE=$(curl -s "$APP/api/signup/$RUN_ID")
-echo "$STATUS_RESPONSE"
-
-# ---------- 7. Cancel again to clean up ----------
-blue "=== 7. Cleaning up — cancelling restarted workflow ==="
-curl -s -X DELETE "$APP/api/signup/$RUN_ID"
-
-sleep 1
-
-# ---------- 8. Start a fresh run and let it complete ----------
-blue "=== 8. Starting a fresh workflow to test completion ==="
+# ---------- 5. Start a fresh run to test completion ----------
+blue "=== 5. Starting a fresh workflow for completion test ==="
 START2=$(curl -s -X POST "$APP/api/signup" \
   -H 'Content-Type: application/json' \
   -d '{"email": "complete-test@example.com"}')
@@ -81,14 +66,10 @@ blue "Status before hooks:"
 curl -s "$APP/api/signup/$RUN_ID2"
 echo
 
-# The workflow has: sendWelcomeEmail step → fetch → 3x sleep → untyped hook → typed hook
-# After the sleeps complete, we need to resume both hooks.
-# The hook tokens are logged by the workflow — check the app logs for them.
-
 echo
 green "=== Done ==="
 echo
-blue "The fresh workflow ($RUN_ID2) is now waiting on hooks."
+blue "The workflow ($RUN_ID2) is now running (steps + sleeps + hooks)."
 blue "Check the app logs for hook tokens, then resume them:"
 echo
 echo "  # Resume the untyped hook:"

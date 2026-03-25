@@ -11,8 +11,6 @@
 
 import type { Hook, HookOptions } from "@workflow/core";
 
-export { Run, type WorkflowRunStatus, start, getRun } from "./run.js";
-
 /**
  * Metadata returned when a hook is resumed.
  */

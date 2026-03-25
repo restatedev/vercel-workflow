@@ -47,9 +47,45 @@ function rethrowFatalAsTerminal(err: unknown): never {
 
 export function workflowEntrypoint(workflowCode: string) {
   return createEndpointHandler({
-    services: [createService(workflowCode), hookObj],
+    services: [createService(workflowCode), hookObj, runMetadataObj],
   });
 }
+
+// ---------------------------------------------------------------------------
+// runMetadata — durable store for the mapping from Vercel runId to
+// Restate invocationId + workflow metadata.
+// ---------------------------------------------------------------------------
+
+type RunMetadataState = {
+  workflowName: string;
+  invocationId: string;
+  createdAt: number;
+};
+
+const runMetadataObj = object({
+  name: "workflowRunMetadata",
+  handlers: {
+    // eslint-disable-next-line @typescript-eslint/require-await
+    store: async (
+      ctx: ObjectContext<RunMetadataState>,
+      input: { workflowName: string; invocationId: string }
+    ) => {
+      ctx.set("workflowName", input.workflowName);
+      ctx.set("invocationId", input.invocationId);
+      ctx.set("createdAt", Date.now());
+    },
+
+    get: async (ctx: ObjectContext<RunMetadataState>) => {
+      const invocationId = await ctx.get("invocationId");
+      if (!invocationId) return null;
+      return {
+        workflowName: await ctx.get("workflowName"),
+        invocationId,
+        createdAt: await ctx.get("createdAt"),
+      };
+    },
+  },
+});
 
 export function stepEntrypoint() {}
 
@@ -161,12 +197,13 @@ async function restateHandler(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const args: unknown[] = await serialization.hydrateWorkflowArguments(
+  const hydrated = await serialization.hydrateWorkflowArguments(
     [input],
     restateCtx.request().id,
     undefined,
     vmGlobalThis
   );
+  const args: unknown[] = Array.isArray(hydrated) ? hydrated : [input];
 
   // Invoke user workflow
   try {
