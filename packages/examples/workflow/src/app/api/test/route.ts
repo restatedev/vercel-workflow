@@ -44,6 +44,9 @@ export async function POST(_request: Request) {
     // const hook = await waitForHook(run4, { token: "approval:doc-1" });
     // expect(hook.token).toBe("approval:doc-1");
 
+    // wait for one second
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
     await resumeHook("approval:doc-1", {
       approved: true,
       reviewer: "alice",
@@ -55,6 +58,7 @@ export async function POST(_request: Request) {
     const run5 = await start(hookWorkflow, ["doc-2"]);
 
     // await waitForHook(run5, { token: "approval:doc-2" });
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     await resumeHook("approval:doc-2", {
       approved: false,

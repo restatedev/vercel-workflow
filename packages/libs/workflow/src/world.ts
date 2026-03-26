@@ -174,7 +174,7 @@ export function createWorld(): World {
             .create({
               workflowName: eventData.workflowName,
               serviceName,
-              input: JSON.stringify(rawArgs[0]),
+              input: JSON.stringify(rawArgs),
             });
 
           return {

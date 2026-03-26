@@ -10,7 +10,6 @@ import {
   serde,
   InvocationIdParser
 } from "@restatedev/restate-sdk/fetch";
-import * as serialization from "@workflow/core/serialization";
 import { createContext as vmCreateContext, runInContext } from "node:vm";
 import { parseStepName, parseWorkflowName } from "./parse-name.js";
 import { globalStepRegistry } from "./internal/private.js";
@@ -310,14 +309,7 @@ async function restateHandler(
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const hydrated = await serialization.hydrateWorkflowArguments(
-    [payload],
-    restateCtx.request().id,
-    undefined,
-    vmGlobalThis
-  );
-  const args: unknown[] = Array.isArray(hydrated) ? hydrated : [payload];
+  const args: unknown[] = JSON.parse(payload) as unknown[];
 
   // Invoke user workflow
   try {
