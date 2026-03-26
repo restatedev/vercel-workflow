@@ -170,7 +170,33 @@ export const workflowRunObj = object({
       }
     ),
 
-    // Shared handler so it can run concurrently with the exclusive submit handler
+    // Wait for the workflow invocation to complete and return the final state.
+    // Shared so it can run concurrently with the exclusive submit handler.
+    awaitResult: handlers.object.shared(
+      async (ctx: ObjectSharedContext<WorkflowRunState>) => {
+        let data = await ctx.get("data");
+
+        if (!data) {
+          throw new TerminalError(`Workflow run ${ctx.key} not found`);
+        }
+
+        // Wait for submit to set the invocationId (handles create→submit race)
+        while (data.status === "pending") {
+          await ctx.sleep(100);
+          data = (await ctx.objectClient(workflowRunObj, ctx.key).get()) ?? data;
+        }
+
+        if (!data.invocationId) {
+          throw new TerminalError(
+            `Workflow run ${ctx.key} has status "${data.status}" but no invocationId`
+          );
+        }
+
+        const invocationId = InvocationIdParser.fromString(data.invocationId);
+        return await ctx.attach(invocationId, serde.json);
+      }
+    ),
+
     cancel: handlers.object.shared(
       async (ctx: ObjectSharedContext<WorkflowRunState>): Promise<WorkflowRunData | null> => {
         const data = await ctx.get("data");

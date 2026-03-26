@@ -72,10 +72,8 @@
     "@restatedev/pubsub-client": "catalog:",
     "@vercel/queue": "catalog:",
     "workflow": "catalog:",
-    "zod": "catalog:"
-  },
-  "dependencies": {
-    "ms": "^2.1.3"
+    "zod": "catalog:",
+    "ms": "^2.1.0"
   },
   "devDependencies": {
     "@types/ms": "^2.1.0",

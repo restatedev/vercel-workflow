@@ -6,7 +6,9 @@ import {
   type StartOptions,
 } from "@workflow/core/runtime";
 import * as clients from "@restatedev/restate-sdk-clients";
-import { sleepObj } from "./runtime.js";
+import { WorkflowRunCancelledError, WorkflowRunFailedError } from "@workflow/errors";
+import { sleepObj, workflowRunObj } from "./runtime.js";
+import { TerminalError } from "@restatedev/restate-sdk/fetch";
 
 // Re-export everything from workflow/api that we don't override
 export {
@@ -58,6 +60,29 @@ export class Run<TResult> extends CoreRun<TResult> {
     }
 
     return { stoppedCount };
+  }
+
+  override get returnValue(): Promise<TResult> {
+    return this.attachReturnValue();
+  }
+
+  private async attachReturnValue(): Promise<TResult> {
+    const restate = clients.connect({ url: getIngressUrl() });
+    try {
+      return await restate
+        .objectClient(workflowRunObj, this.runId)
+        .awaitResult() as TResult;
+    } catch (err) {
+      if (err instanceof TerminalError && err.code === 409) {
+        throw new WorkflowRunCancelledError(this.runId);
+      }
+     if (err instanceof TerminalError) {
+        throw new WorkflowRunFailedError(this.runId, {
+          message: err.message ?? "Unknown error",
+        });
+      }
+      throw err;
+    }
   }
 }
 
