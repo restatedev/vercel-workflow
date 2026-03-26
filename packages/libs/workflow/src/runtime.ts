@@ -7,7 +7,8 @@ import {
   ObjectSharedContext,
   service,
   TerminalError,
-  serde
+  serde,
+  InvocationIdParser
 } from "@restatedev/restate-sdk/fetch";
 import * as serialization from "@workflow/core/serialization";
 import { createContext as vmCreateContext, runInContext } from "node:vm";
@@ -60,11 +61,17 @@ export function workflowEntrypoint(workflowCode: string) {
 // ---------------------------------------------------------------------------
 
 export interface WorkflowRunData {
+  runId: string;
   workflowName: string;
-  serviceName: string;
-  input: string;
-  invocationId: string | null;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  output?: unknown;
+  error?: string;
   createdAt: number;
+  completedAt?: number;
+  // Dispatch metadata
+  serviceName: string;
+  serializedInput: string;
+  invocationId?: string;
 }
 
 type WorkflowRunState = { data: WorkflowRunData };
@@ -75,14 +82,17 @@ export const workflowRunObj = object({
     create: async (
       ctx: ObjectContext<WorkflowRunState>,
       input: { workflowName: string; serviceName: string; input: string }
-    ) => {
-      ctx.set("data", {
+    ): Promise<WorkflowRunData> => {
+      const data: WorkflowRunData = {
+        runId: ctx.key,
         workflowName: input.workflowName,
-        serviceName: input.serviceName,
-        input: input.input,
-        invocationId: null,
+        status: "pending" as const,
         createdAt: await ctx.date.now(),
-      });
+        serviceName: input.serviceName,
+        serializedInput: input.input,
+      };
+      ctx.set("data", data);
+      return data;
     },
 
     submit: async (
@@ -97,25 +107,70 @@ export const workflowRunObj = object({
       }
 
       // Idempotent: skip if already submitted
-      if (data.invocationId) return { invocationId: data.invocationId };
+      if (data.status !== "pending") return;
 
       const handle = ctx.genericSend({
         service: data.serviceName,
         method: "run",
-        parameter: { serviceName: data.serviceName, payload: data.input, runId: ctx.key, workflowName: data.workflowName },
+        parameter: { serviceName: data.serviceName, payload: data.serializedInput, runId: ctx.key, workflowName: data.workflowName },
         inputSerde: serde.json,
         ...(input.delaySeconds ? { delay: input.delaySeconds * 1000 } : {}),
         ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
       });
 
-      const invocationId = (await handle.invocationId).toString();
-      ctx.set("data", { ...data, invocationId });
-      return { invocationId };
+      const invocationId = await handle.invocationId;
+      const runningData = { ...data, invocationId: invocationId.toString(), status: "running" as const };
+      ctx.set("data", runningData);
+
+      // Await workflow completion
+      try {
+        const output = await ctx.attach(invocationId, serde.json);
+        ctx.set("data", {
+          ...runningData,
+          status: "completed" as const,
+          output,
+          completedAt: await ctx.date.now(),
+        });
+      } catch (err) {
+        const completedAt = await ctx.date.now();
+        if (err instanceof TerminalError && err.code === 409) {
+          ctx.set("data", { ...runningData, status: "cancelled" as const, completedAt });
+        } else if (err instanceof TerminalError) {
+          ctx.set("data", { ...runningData, status: "failed" as const, error: err.message, completedAt });
+        } else {
+          throw err; // Non-terminal → let Restate retry
+        }
+      }
     },
 
     get: handlers.object.shared(
       async (ctx: ObjectSharedContext<WorkflowRunState>) => {
         return await ctx.get("data");
+      }
+    ),
+
+    // Shared handler so it can run concurrently with the exclusive submit handler
+    cancel: handlers.object.shared(
+      async (ctx: ObjectSharedContext<WorkflowRunState>): Promise<WorkflowRunData | null> => {
+        const data = await ctx.get("data");
+        if (!data?.invocationId) return data;
+
+        const invocationId = InvocationIdParser.fromString(data.invocationId);
+        ctx.cancel(invocationId);
+
+        try {
+          await ctx.attach(invocationId, serde.json);
+        } catch {
+          // Expected: TerminalError for cancelled invocation
+        }
+
+        // Poll via the shared get handler until submit has updated the status
+        let current = await ctx.objectClient(workflowRunObj, ctx.key).get();
+        while (current && current.status === "running") {
+          await ctx.sleep(100);
+          current = await ctx.objectClient(workflowRunObj, ctx.key).get();
+        }
+        return current;
       }
     ),
   },

@@ -23,6 +23,7 @@ import type {
   MessageId,
   QueueOptions,
 } from "@workflow/world";
+import { WorkflowRunNotFoundError } from "@workflow/errors";
 
 // ---------------------------------------------------------------------------
 // Env helpers
@@ -36,35 +37,37 @@ function getIngressUrl(): string {
   return ingress.replace(/\/+$/, "");
 }
 
-function getAdminUrl(): string {
-  const admin = process.env["RESTATE_ADMIN_URL"];
-  if (!admin) {
-    throw new Error("Please set the RESTATE_ADMIN_URL env var.");
-  }
-  return admin.replace(/\/+$/, "");
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeRun(
-  runId: string,
-  workflowName: string,
-  createdAt: Date,
-  overrides: Partial<WorkflowRun>
-): WorkflowRun {
+async function toWorkflowRun(data: WorkflowRunData): Promise<WorkflowRun> {
+  const overrides: Partial<WorkflowRun> = {};
+
+  if (data.status === "completed" && data.output !== undefined) {
+    overrides.output = await serialization.dehydrateWorkflowReturnValue(
+      data.output,
+      data.runId,
+      undefined,
+      globalThis
+    );
+  }
+
+  if (data.error) {
+    overrides.error = { message: data.error };
+  }
+
   return {
-    runId,
+    runId: data.runId,
     deploymentId: "restate",
-    workflowName,
+    workflowName: data.workflowName,
     input: [],
-    createdAt,
+    createdAt: new Date(data.createdAt),
     updatedAt: new Date(),
-    status: "running",
+    status: data.status,
     output: undefined,
     error: undefined,
-    completedAt: undefined,
+    completedAt: data.completedAt ? new Date(data.completedAt) : undefined,
     ...overrides,
   } as WorkflowRun;
 }
@@ -97,16 +100,15 @@ export function createWorld(): World {
     ) {
       const payload = message as { runId: string };
 
-      // Submit the workflow run — the workflowRun virtual object
-      // already has the input stored from events.create.
-      const { invocationId } = await restate
-        .objectClient(workflowRunObj, payload.runId)
+      // Submit the workflow run (fire-and-forget — submit awaits completion internally)
+      await restate
+        .objectSendClient(workflowRunObj, payload.runId)
         .submit({
           idempotencyKey: opts?.idempotencyKey,
           delaySeconds: opts?.delaySeconds,
         });
 
-      return { messageId: invocationId as MessageId };
+      return { messageId: payload.runId as MessageId };
     },
 
     createQueueHandler() {
@@ -124,63 +126,10 @@ export function createWorld(): World {
           .get();
 
         if (!data) {
-          return {
-            runId: id,
-            deploymentId: "restate",
-            workflowName: "unknown",
-            input: [],
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            status: "running",
-            output: undefined,
-            error: undefined,
-            completedAt: undefined,
-          } as WorkflowRun;
+          throw new WorkflowRunNotFoundError(id);
         }
 
-        const createdAt = new Date(data.createdAt);
-
-        // Not yet submitted (e.g., delayed start)
-        if (!data.invocationId) {
-          return makeRun(id, data.workflowName, createdAt, {
-            status: "pending",
-          });
-        }
-
-        // Query Restate for invocation output
-        const res = await fetch(
-          `${ingress}/restate/invocation/${encodeURIComponent(data.invocationId)}/output`,
-          { headers: { Accept: "application/json" } }
-        );
-
-        if (res.ok) {
-          const rawOutput: unknown = await res.json();
-          // Serialize in Vercel's format so hydrateWorkflowReturnValue can read it
-          const output = await serialization.dehydrateWorkflowReturnValue(
-            rawOutput,
-            id,
-            undefined,
-            globalThis
-          );
-          return makeRun(id, data.workflowName, createdAt, {
-            status: "completed",
-            output,
-            completedAt: new Date(),
-          });
-        }
-
-        if (res.status === 470) {
-          return makeRun(id, data.workflowName, createdAt, {
-            status: "running",
-          });
-        }
-
-        const errorText = await res.text().catch(() => "");
-        return makeRun(id, data.workflowName, createdAt, {
-          status: "failed",
-          error: { message: errorText || "Workflow failed" },
-          completedAt: new Date(),
-        });
+        return toWorkflowRun(data);
       },
 
       list: notImplemented("runs.list") as unknown as World["runs"]["list"],
@@ -220,22 +169,16 @@ export function createWorld(): World {
             );
 
           // Create the workflow run object — stores input durably in Restate
-          await restate
-            .objectSendClient(workflowRunObj, runId!)
+          const runData = await restate
+            .objectClient(workflowRunObj, runId!)
             .create({
               workflowName: eventData.workflowName,
               serviceName,
               input: JSON.stringify(rawArgs[0]),
             });
 
-          const now = new Date();
           return {
-            run: makeRun(
-              runId!,
-              eventData.workflowName,
-              now,
-              { status: "pending" }
-            ),
+            run: await toWorkflowRun(runData),
           };
         }
 
@@ -263,25 +206,13 @@ export function createWorld(): World {
         }
 
         if (eventType === "run_cancelled" && runId) {
-          const data: WorkflowRunData | null = await restate
+          const cancelData: WorkflowRunData | null = await restate
             .objectClient(workflowRunObj, runId)
-            .get();
+            .cancel();
 
-          if (data?.invocationId) {
-            const admin = getAdminUrl();
-            await fetch(
-              `${admin}/invocations/${encodeURIComponent(data.invocationId)}`,
-              { method: "DELETE" }
-            );
-          }
-          if (data) {
+          if (cancelData) {
             return {
-              run: makeRun(
-                runId,
-                data.workflowName,
-                new Date(data.createdAt),
-                { status: "cancelled", completedAt: new Date() }
-              ),
+              run: await toWorkflowRun(cancelData),
             };
           }
         }
