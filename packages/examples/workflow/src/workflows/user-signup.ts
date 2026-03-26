@@ -22,20 +22,20 @@ export async function handleSignup(email: string) {
 
   // Durable sleep; Sleep supports three formats: string, milliseconds, and Date
   await sleep("5s");
-  await sleep(3000);
-  await sleep(new Date(Date.now() + 2000));
-
-  // Durable hooks — using createHook directly
-  const hook = createHook<{ message: string }>();
-  console.log("Hook token:", hook.token);
-  const payload = await hook;
-  console.log("Received:", payload.message);
-
-  // Typed hooks — using defineHook for type-safe creation and resumption
-  const approval = approvalHook.create();
-  console.log("Approval hook token:", approval.token);
-  const approvalResult = await approval;
-  console.log("Approved:", approvalResult.approved, "Comment:", approvalResult.comment);
+  // await sleep(3000);
+  // await sleep(new Date(Date.now() + 2000));
+  //
+  // // Durable hooks — using createHook directly
+  // const hook = createHook<{ message: string }>();
+  // console.log("Hook token:", hook.token);
+  // const payload = await hook;
+  // console.log("Received:", payload.message);
+  //
+  // // Typed hooks — using defineHook for type-safe creation and resumption
+  // const approval = approvalHook.create();
+  // console.log("Approval hook token:", approval.token);
+  // const approvalResult = await approval;
+  // console.log("Approved:", approvalResult.approved, "Comment:", approvalResult.comment);
 
   return { userId: "temp-id", status: "onboarded" };
 }

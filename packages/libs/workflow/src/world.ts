@@ -13,7 +13,7 @@ import * as clients from "@restatedev/restate-sdk-clients";
 import * as serialization from "@workflow/core/serialization";
 import { parseWorkflowName } from "./parse-name.js";
 import { workflowRunObj, hookObj } from "./runtime.js";
-import type { WorkflowRunData } from "./runtime.js";
+import type { WorkflowRunData, HookData } from "./runtime.js";
 import type {
   World,
   WorkflowRun,
@@ -239,21 +239,23 @@ export function createWorld(): World {
     // ------ Storage: hooks ------
 
     hooks: {
-      get: notImplemented("hooks.get"),
-      getByToken(token: string) {
-        // Return a minimal Hook object. Vercel's resumeHook uses this to
-        // get the runId and hookId before creating a hook_received event.
-        // We use the token as hookId and a placeholder runId — the actual
-        // resumption is done in events.create for hook_received.
-        return Promise.resolve({
-          runId: "restate",
-          hookId: token,
-          token,
-          ownerId: "restate",
-          projectId: "restate",
-          environment: "development",
-          createdAt: new Date(),
-        });
+      async get(hookId: string) {
+        const hookData: HookData | null = await restate
+          .objectClient(hookObj, hookId)
+          .get();
+        if (!hookData) {
+          throw new Error(`Hook ${hookId} not found`);
+        }
+        return { ...hookData, createdAt: new Date(hookData.createdAt) };
+      },
+      async getByToken(token: string) {
+        const hookData: HookData | null = await restate
+          .objectClient(hookObj, token)
+          .get();
+        if (!hookData) {
+          throw new Error(`Hook with token ${token} not found`);
+        }
+        return { ...hookData, createdAt: new Date(hookData.createdAt) };
       },
       list: notImplemented("hooks.list"),
     } as unknown as World["hooks"],

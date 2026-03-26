@@ -39,6 +39,27 @@ function isFatalError(err: unknown): err is Error & { fatal: true } {
 }
 
 /**
+ * Errors thrown inside a VM context have a different prototype chain.
+ * `instanceof Error` will fail in the host, and `JSON.stringify` returns "{}"
+ * because Error properties are non-enumerable.  Convert them to host Errors.
+ */
+function ensureHostError(err: unknown): unknown {
+  if (err instanceof Error) return err;
+  if (
+    typeof err === "object" &&
+    err !== null &&
+    "message" in err &&
+    typeof (err as Record<string, unknown>).message === "string"
+  ) {
+    const hostErr = new Error((err as Error).message);
+    if ("stack" in err) hostErr.stack = (err as Error).stack;
+    if ("name" in err) hostErr.name = (err as Error).name;
+    return hostErr;
+  }
+  return err;
+}
+
+/**
  * If the error is a Vercel Workflow FatalError, re-throw as a Restate
  * TerminalError so that Restate stops retrying.
  */
@@ -51,7 +72,7 @@ function rethrowFatalAsTerminal(err: unknown): never {
 
 export function workflowEntrypoint(workflowCode: string) {
   return createEndpointHandler({
-    services: [createService(workflowCode), hookObj, workflowRunObj],
+    services: [...createServices(workflowCode), hookObj, workflowRunObj],
   });
 }
 
@@ -179,31 +200,36 @@ export const workflowRunObj = object({
 export function stepEntrypoint() {}
 
 /**
- * TODO: this is a hack, find better solution
- * Extract the Restate service name from the bundled workflow code.
+ * Extract all Restate service names from the bundled workflow code.
  * The bundle contains: __private_workflows.set("workflow//path//FunctionName", ...)
+ * There may be multiple workflows in a single bundle.
  */
-function extractServiceName(workflowCode: string): string {
-  const match = workflowCode.match(
-    /__private_workflows\.set\("(workflow\/\/[^"]+)"/
-  );
-  if (!match) {
+function extractServiceNames(workflowCode: string): string[] {
+  const regex = /__private_workflows\.set\("(workflow\/\/[^"]+)"/g;
+  const names: string[] = [];
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(workflowCode)) !== null) {
+    const workflowId = match[1]!;
+    names.push(parseWorkflowName(workflowId)?.shortName ?? workflowId);
+  }
+  if (names.length === 0) {
     throw new Error(
       "Could not extract workflow name from bundled workflow code"
     );
   }
-  const workflowId = match[1]!;
-  return parseWorkflowName(workflowId)?.shortName ?? workflowId;
+  return names;
 }
 
-function createService(workflowCode: string) {
-  const serviceName = extractServiceName(workflowCode);
-  return service({
-    name: serviceName,
-    handlers: {
-      run: (ctx, {serviceName, payload, runId, workflowName}: {serviceName: string, payload: string, runId: string, workflowName: string}) => restateHandler(ctx, workflowCode, serviceName, payload, runId, workflowName),
-    },
-  });
+function createServices(workflowCode: string) {
+  const serviceNames = extractServiceNames(workflowCode);
+  return serviceNames.map((serviceName) =>
+    service({
+      name: serviceName,
+      handlers: {
+        run: (ctx, {serviceName, payload, runId, workflowName}: {serviceName: string, payload: string, runId: string, workflowName: string}) => restateHandler(ctx, workflowCode, serviceName, payload, runId, workflowName),
+      },
+    })
+  );
 }
 
 interface WorkflowOrchestratorContext {
@@ -227,7 +253,7 @@ async function restateHandler(
   };
 
   const useStep = createUseStep(workflowContext);
-  const createHook = createCreateHook(workflowContext);
+  const createHook = createCreateHook(workflowContext, runId);
   const sleep = createSleep(workflowContext);
   const durableFetch = createDurableFetch(workflowContext);
 
@@ -297,7 +323,9 @@ async function restateHandler(
   try {
     return await workflowFn(...args);
   } catch (err) {
-    rethrowFatalAsTerminal(err);
+    // VM errors have a different Error prototype, so `instanceof Error` fails
+    // in the Restate SDK. Convert them to host Errors to preserve the message.
+    rethrowFatalAsTerminal(ensureHostError(err));
   }
 }
 
@@ -315,6 +343,16 @@ function createContext(restateCtx: Context) {
       'Global "fetch" is unavailable in workflow functions. It will be replaced with a durable version at runtime.'
     );
   };
+
+  // Polyfill Symbol.dispose / Symbol.asyncDispose inside the VM so the
+  // compiled `using` keyword works (Node < 20.4 lacks these).
+  const vmSymbol = g.Symbol as unknown as Record<string, unknown>;
+  if (!vmSymbol["dispose"]) {
+    vmSymbol["dispose"] = Symbol.for("Symbol.dispose");
+  }
+  if (!vmSymbol["asyncDispose"]) {
+    vmSymbol["asyncDispose"] = Symbol.for("Symbol.asyncDispose");
+  }
 
   // HACK: Shim `exports` for the bundle
   // TODO(slinkydeveloper) seems important, need to figure out why
@@ -443,7 +481,7 @@ function createUseStep(ctx: WorkflowOrchestratorContext) {
   };
 }
 
-export function createCreateHook(ctx: WorkflowOrchestratorContext) {
+export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string) {
   return function createHookImpl<T = unknown>(
     options: HookOptions = {}
   ): Hook<T> {
@@ -455,6 +493,15 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext) {
     ctx.restateCtx.objectSendClient(hookObj, token).createAndSubscribe({
       invocationId: ctx.restateCtx.request().id,
       awakeableId: id,
+      hook: {
+        runId,
+        hookId: token,
+        token,
+        ownerId: "restate",
+        projectId: "restate",
+        environment: "development",
+        createdAt: 0, // Overwritten by handler with ctx.date.now()
+      },
     });
 
     const hook: Hook<T> = {
@@ -486,8 +533,26 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext) {
       },
     };
 
+    // Also register with the VM's Symbol.dispose if it differs from the host's.
+    // vm.createContext() has its own Symbol constructor where dispose may be
+    // polyfilled to a different value than the host's native Symbol.dispose.
+    const vmDispose = (ctx.globalThis.Symbol as Record<string, unknown>)?.dispose as symbol | undefined;
+    if (vmDispose && vmDispose !== Symbol.dispose) {
+      (hook as unknown as Record<symbol, unknown>)[vmDispose] = () => hook.dispose();
+    }
+
     return hook;
   };
+}
+
+export interface HookData {
+  runId: string;
+  hookId: string;
+  token: string;
+  ownerId: string;
+  projectId: string;
+  environment: string;
+  createdAt: number;
 }
 
 type HookMetadata = {
@@ -498,6 +563,7 @@ type HooksState = {
   result: unknown;
   metadata: HookMetadata;
   subscribers: string[];
+  hook: HookData;
 };
 
 export const hookObj = object({
@@ -507,9 +573,15 @@ export const hookObj = object({
       ctx: ObjectContext<HooksState>,
       input: HookMetadata & {
         awakeableId: string;
+        hook: HookData;
       }
     ) => {
-      // If there's input, easily solved
+      // Store hook data
+      if ((await ctx.get("hook")) === null) {
+        ctx.set("hook", { ...input.hook, createdAt: await ctx.date.now() });
+      }
+
+      // If there's already a result, resolve immediately
       const result = await ctx.get("result");
       if (result !== null) {
         ctx.resolveAwakeable(input.awakeableId, result);
@@ -541,6 +613,11 @@ export const hookObj = object({
       ctx.set("result", result);
       return (await ctx.get("metadata"))!;
     },
+    get: handlers.object.shared(
+      async (ctx: ObjectSharedContext<HooksState>) => {
+        return await ctx.get("hook");
+      }
+    ),
     // eslint-disable-next-line @typescript-eslint/require-await
     dispose: async (ctx: ObjectContext) => {
       ctx.clearAll();
