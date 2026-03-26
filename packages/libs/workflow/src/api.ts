@@ -3,8 +3,8 @@ import {
   start as coreStart,
   type StopSleepOptions,
   type StopSleepResult,
-  type StartOptions,
 } from "@workflow/core/runtime";
+import type { WorkflowRunStatus } from "@workflow/world";
 import * as clients from "@restatedev/restate-sdk-clients";
 import { WorkflowRunCancelledError, WorkflowRunFailedError } from "@workflow/errors";
 import { hookObj, sleepObj, workflowRunObj } from "./runtime.js";
@@ -60,6 +60,33 @@ export class Run<TResult> extends CoreRun<TResult> {
     }
 
     return { stoppedCount };
+  }
+
+  override get status(): Promise<WorkflowRunStatus> {
+    return this.fetchStatus();
+  }
+
+  private async fetchStatus(): Promise<WorkflowRunStatus> {
+    const restate = clients.connect({ url: getIngressUrl() });
+    const data = await restate
+      .objectClient(workflowRunObj, this.runId)
+      .get();
+    if (!data) {
+      throw new Error(`Workflow run ${this.runId} not found`);
+    }
+    return data.status;
+  }
+
+  override get exists(): Promise<boolean> {
+    return this.checkExists();
+  }
+
+  private async checkExists(): Promise<boolean> {
+    const restate = clients.connect({ url: getIngressUrl() });
+    const data = await restate
+      .objectClient(workflowRunObj, this.runId)
+      .get();
+    return data !== null;
   }
 
   override get returnValue(): Promise<TResult> {
