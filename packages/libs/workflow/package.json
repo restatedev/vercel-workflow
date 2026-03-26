@@ -22,6 +22,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./api": {
+      "import": "./dist/api.js",
+      "require": "./dist/api.cjs"
+    },
     "./internal/private": {
       "import": "./dist/internal/private.js",
       "require": "./dist/internal/private.cjs"

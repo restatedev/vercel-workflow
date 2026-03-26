@@ -19,30 +19,28 @@ export async function POST(_request: Request) {
     const run2 = await start(sleepingWorkflow, ["test-input"]);
 
     // const sleepId = await waitForSleep(run2);
-    // expect(sleepId).toBeTypeOf("string");
-    // await getRun(run2.runId).wakeUp({ correlationIds: [sleepId] });
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await getRun(run2.runId).wakeUp();
 
-    // const result2 = await run2.returnValue;
-    // console.log("result2:", JSON.stringify(result2), "expected:", JSON.stringify("finalized:prepared:test-input"));
-    //
-    // const run3 = await start(multiSleepWorkflow, ["multi"]);
+    const result2 = await run2.returnValue;
+    console.log("result2:", JSON.stringify(result2), "expected:", JSON.stringify("finalized:prepared:test-input"));
+
+    const run3 = await start(multiSleepWorkflow, ["multi"]);
 
     // Wake up the first sleep (1h)
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     // const firstSleepId = await waitForSleep(run3);
-    // await getRun(run3.runId).wakeUp({ correlationIds: [firstSleepId] });
+    await getRun(run3.runId).wakeUp();
 
     // Wake up the second sleep (24h)
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     // const secondSleepId = await waitForSleep(run3);
-    // expect(secondSleepId).not.toBe(firstSleepId);
-    // await getRun(run3.runId).wakeUp({ correlationIds: [secondSleepId] });
+    await getRun(run3.runId).wakeUp();
 
-    // const result3 = await run3.returnValue;
-    // console.log("result3:", JSON.stringify(result3), "expected:", JSON.stringify("done:finalized:prepared:multi"));
+    const result3 = await run3.returnValue;
+    console.log("result3:", JSON.stringify(result3), "expected:", JSON.stringify("done:finalized:prepared:multi"));
 
     const run4 = await start(hookWorkflow, ["doc-1"]);
-
-    // const hook = await waitForHook(run4, { token: "approval:doc-1" });
-    // expect(hook.token).toBe("approval:doc-1");
 
     // wait for one second
     await new Promise(resolve => setTimeout(resolve, 2000));

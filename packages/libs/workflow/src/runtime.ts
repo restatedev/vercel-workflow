@@ -5,6 +5,7 @@ import {
   object,
   ObjectContext,
   ObjectSharedContext,
+  RestatePromise,
   service,
   TerminalError,
   serde,
@@ -71,7 +72,7 @@ function rethrowFatalAsTerminal(err: unknown): never {
 
 export function workflowEntrypoint(workflowCode: string) {
   return createEndpointHandler({
-    services: [...createServices(workflowCode), hookObj, workflowRunObj],
+    services: [...createServices(workflowCode), hookObj, sleepObj, workflowRunObj],
   });
 }
 
@@ -253,7 +254,7 @@ async function restateHandler(
 
   const useStep = createUseStep(workflowContext);
   const createHook = createCreateHook(workflowContext, runId);
-  const sleep = createSleep(workflowContext);
+  const sleep = createSleep(workflowContext, runId);
   const durableFetch = createDurableFetch(workflowContext);
 
   // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
@@ -404,31 +405,51 @@ function createDurableFetch(ctx: WorkflowOrchestratorContext) {
   };
 }
 
-function createSleep(ctx: WorkflowOrchestratorContext) {
-  return function sleep(param: number | Date | string): Promise<void> {
-    let millis: number;
-    if (typeof param === "number") {
-      millis = param;
-    } else if (
-      typeof param === "object" &&
-      param !== null &&
-      typeof param.getTime === "function"
-    ) {
-      // Duck-type Date check: VM Date objects have a different prototype
-      // than the host Date, so `instanceof Date` fails across contexts.
-      millis = param.getTime() - Date.now();
-    } else if (typeof param === "string") {
-      const parsed = ms(param as StringValue);
-      if (parsed === undefined) {
-        throw new Error(
-          `Invalid sleep duration string: ${JSON.stringify(param)}`
-        );
-      }
-      millis = parsed;
-    } else {
-      throw new Error(`Invalid sleep parameter: ${JSON.stringify(param)}`);
+function parseSleepDuration(param: number | Date | string): number {
+  if (typeof param === "number") {
+    return param;
+  } else if (
+    typeof param === "object" &&
+    param !== null &&
+    typeof param.getTime === "function"
+  ) {
+    // Duck-type Date check: VM Date objects have a different prototype
+    // than the host Date, so `instanceof Date` fails across contexts.
+    return param.getTime() - Date.now();
+  } else if (typeof param === "string") {
+    const parsed = ms(param as StringValue);
+    if (parsed === undefined) {
+      throw new Error(
+        `Invalid sleep duration string: ${JSON.stringify(param)}`
+      );
     }
-    return ctx.restateCtx.sleep(millis);
+    return parsed;
+  }
+  throw new Error(`Invalid sleep parameter: ${JSON.stringify(param)}`);
+}
+
+function createSleep(ctx: WorkflowOrchestratorContext, runId: string) {
+  return function sleep(param: number | Date | string): Promise<void> {
+    const millis = parseSleepDuration(param);
+    const correlationId = ctx.restateCtx.rand.uuidv4();
+    const { id: awakeableId, promise: wakeUpPromise } = ctx.restateCtx.awakeable();
+    const timerPromise = ctx.restateCtx.sleep(millis);
+
+    // Register so wakeUp() can find and resolve this awakeable
+    ctx.restateCtx.objectSendClient(sleepObj, runId).register({
+      correlationId,
+      awakeableId,
+    });
+
+    // Race: timer vs external wakeUp
+    const raced = RestatePromise.race([timerPromise, wakeUpPromise]);
+
+    return (raced as Promise<unknown>).then(() => {
+      // Clean up the registration
+      ctx.restateCtx.objectSendClient(sleepObj, runId).complete({
+        correlationId,
+      });
+    });
   };
 }
 
@@ -527,6 +548,63 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
     return hook;
   };
 }
+
+// ---------------------------------------------------------------------------
+// workflowSleep — virtual object tracking pending sleeps for a workflow run.
+// Keyed by runId. Each sleep registers an awakeable that wakeUp() can resolve.
+// ---------------------------------------------------------------------------
+
+type SleepEntry = {
+  correlationId: string;
+  awakeableId: string;
+};
+
+type SleepState = {
+  pending: SleepEntry[];
+};
+
+export const sleepObj = object({
+  name: "workflowSleep",
+  handlers: {
+    register: async (
+      ctx: ObjectContext<SleepState>,
+      input: SleepEntry
+    ) => {
+      const pending = (await ctx.get("pending")) ?? [];
+      pending.push(input);
+      ctx.set("pending", pending);
+    },
+
+    complete: async (
+      ctx: ObjectContext<SleepState>,
+      input: { correlationId: string }
+    ) => {
+      const pending = (await ctx.get("pending")) ?? [];
+      ctx.set("pending", pending.filter(e => e.correlationId !== input.correlationId));
+    },
+
+    wakeUp: async (
+      ctx: ObjectContext<SleepState>,
+      input: { correlationId: string }
+    ) => {
+      const pending = (await ctx.get("pending")) ?? [];
+      const entry = pending.find(e => e.correlationId === input.correlationId);
+      if (!entry) return;
+      ctx.resolveAwakeable(entry.awakeableId, undefined);
+      ctx.set("pending", pending.filter(e => e.correlationId !== input.correlationId));
+    },
+
+    getPending: handlers.object.shared(
+      async (ctx: ObjectSharedContext<SleepState>): Promise<SleepEntry[]> => {
+        return (await ctx.get("pending")) ?? [];
+      }
+    ),
+  },
+});
+
+// ---------------------------------------------------------------------------
+// workflowHooks — virtual object for hook lifecycle. Keyed by hook token.
+// ---------------------------------------------------------------------------
 
 type HooksState = {
   awakeableId: string;
