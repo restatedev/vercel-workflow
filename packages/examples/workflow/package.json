@@ -20,7 +20,7 @@
     "_test": "vitest run",
     "build": "turbo run _build --filter={.}...",
     "_build": "next build",
-    "dev": "RESTATE_LOGGING=debug next dev",
+    "dev": "next dev",
     "start": "turbo run _start --filter={.}...",
     "_start": "next start --port 3000",
     "clean": "rm -rf dist *.tsbuildinfo .turbo .next .swc src/app/.well-known",

@@ -13,7 +13,7 @@ import * as clients from "@restatedev/restate-sdk-clients";
 import * as serialization from "@workflow/core/serialization";
 import { parseWorkflowName } from "./parse-name.js";
 import { workflowRunObj, hookObj } from "./runtime.js";
-import type { WorkflowRunData, HookData } from "./runtime.js";
+import type { WorkflowRunData } from "./runtime.js";
 import type {
   World,
   WorkflowRun,
@@ -240,7 +240,7 @@ export function createWorld(): World {
 
     hooks: {
       async get(hookId: string) {
-        const hookData: HookData | null = await restate
+        const hookData = await restate
           .objectClient(hookObj, hookId)
           .get();
         if (!hookData) {
@@ -249,7 +249,7 @@ export function createWorld(): World {
         return { ...hookData, createdAt: new Date(hookData.createdAt) };
       },
       async getByToken(token: string) {
-        const hookData: HookData | null = await restate
+        const hookData = await restate
           .objectClient(hookObj, token)
           .get();
         if (!hookData) {

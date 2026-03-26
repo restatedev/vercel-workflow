@@ -477,23 +477,14 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
   return function createHookImpl<T = unknown>(
     options: HookOptions = {}
   ): Hook<T> {
-    // Generate hook ID or token
-    const token = options.token ?? ctx.restateCtx.rand.uuidv4();
     const { id, promise } = ctx.restateCtx.awakeable();
+    const token = options.token ?? id;
 
     // Register hook
-    ctx.restateCtx.objectSendClient(hookObj, token).createAndSubscribe({
-      invocationId: ctx.restateCtx.request().id,
+    ctx.restateCtx.objectSendClient(hookObj, token).create({
       awakeableId: id,
-      hook: {
-        runId,
-        hookId: token,
-        token,
-        ownerId: "restate",
-        projectId: "restate",
-        environment: "development",
-        createdAt: 0, // Overwritten by handler with ctx.date.now()
-      },
+      runId,
+      invocationId: ctx.restateCtx.request().id,
     });
 
     const hook: Hook<T> = {
@@ -537,77 +528,55 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
   };
 }
 
-export interface HookData {
-  runId: string;
-  hookId: string;
-  token: string;
-  ownerId: string;
-  projectId: string;
-  environment: string;
-  createdAt: number;
-}
-
-type HookMetadata = {
-  invocationId: string;
-};
-
 type HooksState = {
-  result: unknown;
-  metadata: HookMetadata;
-  subscribers: string[];
-  hook: HookData;
+  awakeableId: string;
+  runId: string;
+  createdAt: number;
+  invocationId: string;
 };
 
 export const hookObj = object({
   name: "workflowHooks",
   handlers: {
-    createAndSubscribe: async (
+    create: async (
       ctx: ObjectContext<HooksState>,
-      input: HookMetadata & {
-        awakeableId: string;
-        hook: HookData;
-      }
+      input: { awakeableId: string; runId: string; invocationId: string }
     ) => {
-      // Store hook data
-      if ((await ctx.get("hook")) === null) {
-        ctx.set("hook", { ...input.hook, createdAt: await ctx.date.now() });
+      // Reject duplicate token while a previous hook is still active
+      if ((await ctx.get("awakeableId")) !== null) {
+        throw new TerminalError("Hook already exists", { errorCode: 409 });
       }
 
-      // If there's already a result, resolve immediately
-      const result = await ctx.get("result");
-      if (result !== null) {
-        ctx.resolveAwakeable(input.awakeableId, result);
-        return;
-      }
-
-      // Set metadata
-      if ((await ctx.get("metadata")) === null) {
-        ctx.set("metadata", {
-          invocationId: input.invocationId,
-        });
-      }
-
-      // Update subscribers
-      const subs = (await ctx.get("subscribers")) ?? [];
-      subs.push(input.awakeableId);
-      ctx.set("subscribers", subs);
+      ctx.set("awakeableId", input.awakeableId);
+      ctx.set("runId", input.runId);
+      ctx.set("invocationId", input.invocationId);
+      ctx.set("createdAt", await ctx.date.now());
     },
     resolve: async (
       ctx: ObjectContext<HooksState>,
       input: unknown
-    ): Promise<HookMetadata> => {
-      const result = (await ctx.get("result")) ?? input;
-      const subs = (await ctx.get("subscribers")) ?? [];
-      for (const sub of subs) {
-        ctx.resolveAwakeable(sub, result);
+    ): Promise<{ invocationId: string }> => {
+      const awakeableId = await ctx.get("awakeableId");
+      if (!awakeableId) {
+        throw new TerminalError("No awakeableId found");
       }
-      ctx.clear("subscribers");
-      ctx.set("result", result);
-      return (await ctx.get("metadata"))!;
+      ctx.resolveAwakeable(awakeableId, input);
+      ctx.clear("awakeableId");
+      return { invocationId: (await ctx.get("invocationId"))! };
     },
     get: handlers.object.shared(
       async (ctx: ObjectSharedContext<HooksState>) => {
-        return await ctx.get("hook");
+        const runId = await ctx.get("runId");
+        if (runId === null) return null;
+        return {
+          runId,
+          hookId: ctx.key,
+          token: ctx.key,
+          ownerId: "restate",
+          projectId: "restate",
+          environment: "development",
+          createdAt: (await ctx.get("createdAt")) ?? 0,
+        };
       }
     ),
     // eslint-disable-next-line @typescript-eslint/require-await
