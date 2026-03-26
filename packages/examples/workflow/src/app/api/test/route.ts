@@ -67,26 +67,19 @@ export async function POST(_request: Request) {
     console.log("result5:", JSON.stringify(result5), "expected:", JSON.stringify({ status: "rejected", reviewer: "bob" }));
 
 
-    // const run6 = await start(webhookWorkflow, ["endpoint-1"]);
+    const run6 = await start(webhookWorkflow, ["endpoint-1"]);
 
     // Webhook tokens are randomly generated, so discover via waitForHook
-    // const hook6 = await waitForHook(run6);
-
-    // await resumeWebhook(
-    //   hook6.token,
-    //   new Request("https://example.com/webhook", {
-    //     method: "POST",
-    //     body: JSON.stringify({ event: "payment.completed", amount: 99 }),
-    //     headers: { "Content-Type": "application/json" },
-    //   })
-    // );
-
-    // const result6 = await run6.returnValue;
-    // expect(result6).toEqual({
-    //   endpointId: "endpoint-1",
-    //   received: { event: "payment.completed", amount: 99 },
-    // });
-
+    const result6 = await run6.returnValue;
+  console.log(
+    "result6:",
+    JSON.stringify(result6),
+    "expected:",
+    JSON.stringify({
+      endpointId: "endpoint-1",
+      received: { event: "payment.completed", amount: 99 },
+    })
+  );
 
   return NextResponse.json({
     message: "Done",

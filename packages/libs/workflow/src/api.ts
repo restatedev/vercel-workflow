@@ -7,12 +7,12 @@ import {
 } from "@workflow/core/runtime";
 import * as clients from "@restatedev/restate-sdk-clients";
 import { WorkflowRunCancelledError, WorkflowRunFailedError } from "@workflow/errors";
-import { sleepObj, workflowRunObj } from "./runtime.js";
+import { hookObj, sleepObj, workflowRunObj } from "./runtime.js";
 import { TerminalError } from "@restatedev/restate-sdk/fetch";
+import type { HookMetadata } from "./index.js";
 
 // Re-export everything from workflow/api that we don't override
 export {
-  resumeWebhook,
   runStep,
   type Event,
   type StartOptions,
@@ -96,3 +96,58 @@ export const start = (async (...args: Parameters<CoreStart>) => {
   const coreRun = await coreStart(...args);
   return new Run(coreRun.runId);
 }) as CoreStart;
+
+/**
+ * Resumes a webhook hook by serializing the incoming HTTP Request and
+ * resolving the corresponding awakeable in Restate.
+ *
+ * Only hooks created via `createWebhook()` (i.e. with `isWebhook: true`)
+ * can be resumed through this function. Regular hooks must use `resumeHook()`.
+ *
+ * @param token - The webhook token (discovered via hook.token inside the workflow)
+ * @param request - The incoming HTTP Request to forward to the workflow
+ * @returns The HTTP Response to send back to the caller
+ */
+export async function resumeWebhook(
+  token: string,
+  request: Request
+): Promise<HookMetadata> {
+  const ingress = getIngressUrl();
+  const restate = clients.connect({ url: ingress });
+
+  // Look up the hook to verify it exists and is a webhook
+  const hookData = await restate.objectClient(hookObj, token).get();
+  if (!hookData) {
+    throw new Error(`Webhook hook not found (token=${token})`);
+  }
+  if (!hookData.isWebhook) {
+    // Same behavior as Vercel: don't reveal that the token exists
+    throw new Error(`Webhook hook not found (token=${token})`);
+  }
+
+  // Serialize the Request to a JSON-compatible format
+  const body = await request.text();
+  const serialized = {
+    method: request.method,
+    url: request.url,
+    headers: [...request.headers.entries()],
+    body: body || null,
+  };
+
+  // Resolve the hook's awakeable with the serialized Request
+  const url = `${ingress}/workflowHooks/${encodeURIComponent(token)}/resolve`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(serialized),
+  });
+
+  if (!res.ok) {
+    const resBody = await res.text().catch(() => "");
+    throw new Error(
+      `Failed to resume webhook (token=${token}): ${res.status} ${res.statusText}${resBody ? ` - ${resBody}` : ""}`
+    );
+  }
+
+  return (await res.json()) as HookMetadata;
+}

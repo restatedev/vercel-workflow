@@ -192,11 +192,24 @@ export function createWorld(): World {
           // The payload was serialized by Vercel's dehydrateStepReturnValue.
           // Deserialize it back to the raw value before sending to Restate.
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const rawPayload = await serialization.hydrateStepArguments(
+          let rawPayload = await serialization.hydrateStepArguments(
             eventData.eventData.payload,
             runId,
             undefined
           );
+
+          // Request objects (from webhooks) are not JSON-serializable —
+          // their properties are non-enumerable so JSON.stringify produces "{}".
+          // Re-serialize to a plain object that the Restate client can transport.
+          if (rawPayload instanceof Request) {
+            rawPayload = {
+              method: rawPayload.method,
+              url: rawPayload.url,
+              headers: [...rawPayload.headers.entries()],
+              body: (await rawPayload.text()) || null,
+            };
+          }
+
           // Forward to Restate's workflowHooks virtual object
           const token = eventData.correlationId;
           await restate
@@ -246,7 +259,12 @@ export function createWorld(): World {
         if (!hookData) {
           throw new Error(`Hook ${hookId} not found`);
         }
-        return { ...hookData, createdAt: new Date(hookData.createdAt) };
+        return {
+          ...hookData,
+          createdAt: new Date(hookData.createdAt),
+          isWebhook: hookData.isWebhook ?? false,
+          metadata: hookData.metadata ?? undefined,
+        };
       },
       async getByToken(token: string) {
         const hookData = await restate
@@ -255,7 +273,12 @@ export function createWorld(): World {
         if (!hookData) {
           throw new Error(`Hook with token ${token} not found`);
         }
-        return { ...hookData, createdAt: new Date(hookData.createdAt) };
+        return {
+          ...hookData,
+          createdAt: new Date(hookData.createdAt),
+          isWebhook: hookData.isWebhook ?? false,
+          metadata: hookData.metadata ?? undefined,
+        };
       },
       list: notImplemented("hooks.list"),
     } as unknown as World["hooks"],

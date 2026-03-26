@@ -1,4 +1,4 @@
-/*
+cur/*
  * Copyright (c) TODO: Add copyright holder
  *
  * This file is part of TODO: Add project name,

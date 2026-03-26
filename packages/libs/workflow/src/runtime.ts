@@ -520,19 +520,50 @@ function createUseStep(ctx: WorkflowOrchestratorContext) {
   };
 }
 
+/**
+ * Serialized representation of a Request object for webhook hooks.
+ * Used to pass Request data through Restate's JSON-based awakeables.
+ */
+type SerializedRequest = {
+  method: string;
+  url: string;
+  headers: [string, string][];
+  body: string | null;
+};
+
+/**
+ * Reconstruct a Request object from its serialized form.
+ * Used inside the workflow VM to give webhook hooks a proper Request.
+ */
+function deserializeRequest(data: SerializedRequest): Request {
+  return new Request(data.url, {
+    method: data.method,
+    headers: new Headers(data.headers),
+    body: data.body,
+  });
+}
+
 export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string) {
   return function createHookImpl<T = unknown>(
     options: HookOptions = {}
   ): Hook<T> {
     const { id, promise } = ctx.restateCtx.awakeable();
     const token = options.token ?? id;
+    const isWebhook = options.isWebhook ?? false;
 
     // Register hook
     ctx.restateCtx.objectSendClient(hookObj, token).create({
       awakeableId: id,
       runId,
       invocationId: ctx.restateCtx.request().id,
+      isWebhook,
+      metadata: options.metadata,
     });
+
+    // For webhook hooks, reconstruct Request from serialized data
+    const resolvedPromise = isWebhook
+      ? promise.then((data) => deserializeRequest(data as SerializedRequest) as T)
+      : (promise as Promise<T>);
 
     const hook: Hook<T> = {
       token,
@@ -544,7 +575,7 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
           | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
           | null
       ): Promise<TResult1 | TResult2> {
-        return (promise as Promise<T>).then(onfulfilled, onrejected);
+        return resolvedPromise.then(onfulfilled, onrejected);
       },
 
       dispose() {
@@ -637,6 +668,8 @@ type HooksState = {
   runId: string;
   createdAt: number;
   invocationId: string;
+  isWebhook: boolean;
+  metadata: unknown;
 };
 
 export const hookObj = object({
@@ -644,7 +677,7 @@ export const hookObj = object({
   handlers: {
     create: async (
       ctx: ObjectContext<HooksState>,
-      input: { awakeableId: string; runId: string; invocationId: string }
+      input: { awakeableId: string; runId: string; invocationId: string; isWebhook?: boolean; metadata?: unknown }
     ) => {
       // Reject duplicate token while a previous hook is still active
       if ((await ctx.get("awakeableId")) !== null) {
@@ -655,6 +688,8 @@ export const hookObj = object({
       ctx.set("runId", input.runId);
       ctx.set("invocationId", input.invocationId);
       ctx.set("createdAt", await ctx.date.now());
+      ctx.set("isWebhook", input.isWebhook ?? false);
+      ctx.set("metadata", input.metadata ?? null);
     },
     resolve: async (
       ctx: ObjectContext<HooksState>,
@@ -680,6 +715,8 @@ export const hookObj = object({
           projectId: "restate",
           environment: "development",
           createdAt: (await ctx.get("createdAt")) ?? 0,
+          isWebhook: (await ctx.get("isWebhook")) ?? false,
+          metadata: (await ctx.get("metadata")) ?? undefined,
         };
       }
     ),
