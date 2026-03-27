@@ -69,6 +69,9 @@ jobs:
           cd packages/libs/workflow
           pnpm pack --pack-destination ../../../.tarballs
           cd ../../..
+          # Include scripts needed by e2e jobs (so they don't need to checkout our repo)
+          cp scripts/patch-upstream-workbench.cjs .tarballs/
+          cp scripts/aggregate-e2e-results.cjs .tarballs/
           echo "::group::Tarballs"
           ls -lh .tarballs/
           echo "::endgroup::"
@@ -148,8 +151,6 @@ jobs:
           --health-retries 15
 
     steps:
-      - uses: actions/checkout@v4
-
       - name: Restore upstream
         uses: actions/cache/restore@v4
         with:
@@ -186,7 +187,7 @@ jobs:
           pnpm --filter ${{ env.APP_NAME }} add "$TARBALL"
 
       - name: Patch workbench for Restate
-        run: node scripts/patch-upstream-workbench.cjs .upstream/workbench/${{ env.APP_NAME }}
+        run: node .tarballs/patch-upstream-workbench.cjs .upstream/workbench/${{ env.APP_NAME }}
 
       - name: Resolve symlinks
         working-directory: .upstream
@@ -446,11 +447,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+
+      - name: Restore tarballs
+        uses: actions/cache/restore@v4
+        with:
+          path: .tarballs
+          key: tarballs-${{ github.sha }}
+          fail-on-cache-miss: true
 
       - name: Download all results
         uses: actions/download-artifact@v4
@@ -465,7 +471,7 @@ jobs:
         run: |
           mkdir -p e2e-results
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          node scripts/aggregate-e2e-results.cjs e2e-results \
+          node .tarballs/aggregate-e2e-results.cjs e2e-results \
             --run-url "$RUN_URL" \
             >> "$GITHUB_STEP_SUMMARY" || true
           if [ ! -s e2e-results/e2e-summary.md ]; then
