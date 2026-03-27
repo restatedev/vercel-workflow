@@ -4,12 +4,12 @@
  * This file contains both "use workflow" and "use step" directives.
  */
 
-export function add(a: number, b: number): Promise<number> {
+export async function add(a: number, b: number): Promise<number> {
   "use step";
   return a + b;
 }
 
-export function multiply(a: number, b: number): Promise<number> {
+export async function multiply(a: number, b: number): Promise<number> {
   "use step";
   return a * b;
 }
