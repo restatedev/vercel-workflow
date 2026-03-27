@@ -4,12 +4,12 @@
  */
 import ms from 'ms';
 
-async function formatDuration(duration: string) {
+async function formatDuration(duration: number) {
   'use step';
   return ms(duration);
 }
 
-export async function durationWorkflow(duration: string) {
+export async function durationWorkflow(duration: number) {
   'use workflow';
   const result = await formatDuration(duration);
   return { ms: result };

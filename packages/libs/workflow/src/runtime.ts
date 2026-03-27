@@ -271,75 +271,77 @@ async function restateHandler(
   runId: string,
   workflowName: string,
 ) {
-  const { context, globalThis: vmGlobalThis } = createContext(restateCtx);
-
-  const workflowContext: WorkflowOrchestratorContext = {
-    globalThis: vmGlobalThis,
-    restateCtx,
-  };
-
-  const useStep = createUseStep(workflowContext);
-  const createHook = createCreateHook(workflowContext, runId);
-  const sleep = createSleep(workflowContext, runId);
-  const durableFetch = createDurableFetch(workflowContext);
-
-  // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
-  vmGlobalThis[WORKFLOW_USE_STEP] = useStep;
-  // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
-  vmGlobalThis[WORKFLOW_CREATE_HOOK] = createHook;
-  // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
-  vmGlobalThis[WORKFLOW_SLEEP] = sleep;
-
-  // Replace the disabled global fetch with the durable version
-  vmGlobalThis.fetch = durableFetch;
-
-  // Execute the workflow code to populate globalThis.__private_workflows,
-  // then retrieve the first registered workflow function.
-  runInContext(workflowCode, context);
-
-  // Set workflow metadata after we know the workflow name.
-  // Getters are lazy so they're safe to read after this point.
-  const startTime = await restateCtx.date.now();
-  // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
-  vmGlobalThis[WORKFLOW_CONTEXT] = {
-    workflowRunId: runId,
-    workflowName: workflowName,
-    get workflowStartedAt() {
-      return startTime;
-    },
-    get url(): string {
-      const ingress = process.env["RESTATE_INGRESS"];
-      if (!ingress) {
-        throw new TerminalError(
-          "Cannot retrieve workflow submission url. Please set RESTATE_INGRESS env var."
-        );
-      }
-      return `${ingress.replace(/\/+$/, "")}/${serviceName}/run`;
-    },
-  };
-
-  const workflowsMap = vmGlobalThis.__private_workflows as
-    | Map<string, (...args: unknown[]) => unknown>
-    | undefined;
-
-  if (!workflowsMap || workflowsMap.size === 0) {
-    throw new ReferenceError(
-      "No workflows registered. The workflow code did not set globalThis.__private_workflows."
-    );
-  }
-
-  const workflowFn = workflowsMap.get(workflowName);
-  if (typeof workflowFn !== "function") {
-    const available = [...workflowsMap.keys()].join(", ");
-    throw new ReferenceError(
-      `Could not find workflow "${workflowName}" in workflowsMap. Available: ${available}`
-    );
-  }
-
-  const args: unknown[] = JSON.parse(payload) as unknown[];
-
-  // Invoke user workflow
+  // Wrap the entire handler so that VM errors (which have a different Error
+  // prototype and JSON.stringify to "{}") are always converted to host Errors
+  // before they propagate to the Restate SDK.
   try {
+    const { context, globalThis: vmGlobalThis } = createContext(restateCtx);
+
+    const workflowContext: WorkflowOrchestratorContext = {
+      globalThis: vmGlobalThis,
+      restateCtx,
+    };
+
+    const useStep = createUseStep(workflowContext);
+    const createHook = createCreateHook(workflowContext, runId);
+    const sleep = createSleep(workflowContext, runId);
+    const durableFetch = createDurableFetch(workflowContext);
+
+    // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
+    vmGlobalThis[WORKFLOW_USE_STEP] = useStep;
+    // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
+    vmGlobalThis[WORKFLOW_CREATE_HOOK] = createHook;
+    // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
+    vmGlobalThis[WORKFLOW_SLEEP] = sleep;
+
+    // Replace the disabled global fetch with the durable version
+    vmGlobalThis.fetch = durableFetch;
+
+    // Execute the workflow code to populate globalThis.__private_workflows,
+    // then retrieve the first registered workflow function.
+    runInContext(workflowCode, context);
+
+    // Set workflow metadata after we know the workflow name.
+    // Getters are lazy so they're safe to read after this point.
+    const startTime = await restateCtx.date.now();
+    // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
+    vmGlobalThis[WORKFLOW_CONTEXT] = {
+      workflowRunId: runId,
+      workflowName: workflowName,
+      get workflowStartedAt() {
+        return startTime;
+      },
+      get url(): string {
+        const ingress = process.env["RESTATE_INGRESS"];
+        if (!ingress) {
+          throw new TerminalError(
+            "Cannot retrieve workflow submission url. Please set RESTATE_INGRESS env var."
+          );
+        }
+        return `${ingress.replace(/\/+$/, "")}/${serviceName}/run`;
+      },
+    };
+
+    const workflowsMap = vmGlobalThis.__private_workflows as
+      | Map<string, (...args: unknown[]) => unknown>
+      | undefined;
+
+    if (!workflowsMap || workflowsMap.size === 0) {
+      throw new ReferenceError(
+        "No workflows registered. The workflow code did not set globalThis.__private_workflows."
+      );
+    }
+
+    const workflowFn = workflowsMap.get(workflowName);
+    if (typeof workflowFn !== "function") {
+      const available = [...workflowsMap.keys()].join(", ");
+      throw new ReferenceError(
+        `Could not find workflow "${workflowName}" in workflowsMap. Available: ${available}`
+      );
+    }
+
+    const args: unknown[] = JSON.parse(payload) as unknown[];
+
     return await workflowFn(...args);
   } catch (err) {
     // VM errors have a different Error prototype, so `instanceof Error` fails
@@ -373,10 +375,38 @@ function createContext(restateCtx: Context) {
     vmSymbol["asyncDispose"] = Symbol.for("Symbol.asyncDispose");
   }
 
-  // HACK: Shim `exports` for the bundle
-  // TODO(slinkydeveloper) seems important, need to figure out why
-  g.exports = {};
-  g.module = { exports: g.exports };
+  // Expose Web Streams globals needed by bundled library code (e.g. AI SDK's
+  // EventSourceParserStream). The upstream builder creates one monolithic bundle
+  // for all workflows, so transitive dependencies are unavoidable.
+  g.TransformStream = globalThis.TransformStream;
+  g.ReadableStream = globalThis.ReadableStream;
+  g.WritableStream = globalThis.WritableStream;
+  g.TextDecoderStream = globalThis.TextDecoderStream;
+  g.Headers = globalThis.Headers;
+  g.TextEncoder = globalThis.TextEncoder;
+  g.TextDecoder = globalThis.TextDecoder;
+  g.console = globalThis.console;
+  g.URL = globalThis.URL;
+  g.URLSearchParams = globalThis.URLSearchParams;
+  g.structuredClone = globalThis.structuredClone;
+
+  // Propagate environment variables
+  (g as any).process = {
+    env: Object.freeze({ ...process.env }),
+  };
+
+  // Stateless + synchronous Web APIs that are made available inside the sandbox
+  g.Headers = globalThis.Headers;
+  g.TextEncoder = globalThis.TextEncoder;
+  g.TextDecoder = globalThis.TextDecoder;
+  g.console = globalThis.console;
+  g.URL = globalThis.URL;
+  g.URLSearchParams = globalThis.URLSearchParams;
+  g.structuredClone = globalThis.structuredClone;
+
+  // TC39 Explicit Resource Management polyfill for `using` keyword
+  (g.Symbol as any).dispose ??= Symbol.for("Symbol.dispose");
+  (g.Symbol as any).asyncDispose ??= Symbol.for("Symbol.asyncDispose");
 
   return {
     context,
@@ -385,12 +415,64 @@ function createContext(restateCtx: Context) {
 }
 
 type SerializedResponse = {
+  __type: "Response";
   status: number;
   statusText: string;
   headers: [string, string][];
   body: string;
   url: string;
 };
+
+/**
+ * Serialize a native Response into a JSON-safe plain object.
+ */
+async function serializeResponse(res: Response): Promise<SerializedResponse> {
+  return {
+    __type: "Response",
+    status: res.status,
+    statusText: res.statusText,
+    headers: [...res.headers.entries()],
+    body: await res.text(),
+    url: res.url,
+  };
+}
+
+function isSerializedResponse(v: unknown): v is SerializedResponse {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    (v as Record<string, unknown>).__type === "Response"
+  );
+}
+
+/**
+ * Reconstruct a Response-like object from serialized data.
+ *
+ * Avoids native `new Response()` because its `headers` getter uses internal
+ * slots that break across the host↔VM boundary.  Own data properties on a
+ * plain object shadow the getter-only properties on Response.prototype.
+ */
+function deserializeResponse(serialized: SerializedResponse): Response {
+  const bodyText = serialized.body;
+  const resp: any = {
+    status: serialized.status,
+    statusText: serialized.statusText,
+    headers: new Headers(serialized.headers),
+    ok: serialized.status >= 200 && serialized.status < 300,
+    url: serialized.url,
+    body: null,
+    bodyUsed: false,
+    redirected: false,
+    type: "basic",
+    text: async () => bodyText,
+    json: async () => JSON.parse(bodyText),
+    arrayBuffer: async () => new TextEncoder().encode(bodyText).buffer,
+    blob: async () => new Blob([bodyText]),
+    clone: () => deserializeResponse(serialized),
+  };
+  Object.setPrototypeOf(resp, Response.prototype);
+  return resp as Response;
+}
 
 function createDurableFetch(ctx: WorkflowOrchestratorContext) {
   return function durableFetch(
@@ -408,26 +490,12 @@ function createDurableFetch(ctx: WorkflowOrchestratorContext) {
     return ctx.restateCtx
       .run(`fetch ${url}`, async (): Promise<SerializedResponse> => {
         try {
-          const res = await fetch(input, init);
-          const body = await res.text();
-          return {
-            status: res.status,
-            statusText: res.statusText,
-            headers: [...res.headers.entries()],
-            body,
-            url: res.url,
-          };
+          return await serializeResponse(await fetch(input, init));
         } catch (err) {
           rethrowFatalAsTerminal(err);
         }
       })
-      .then((serialized: SerializedResponse) => {
-        return new Response(serialized.body, {
-          status: serialized.status,
-          statusText: serialized.statusText,
-          headers: new Headers(serialized.headers),
-        });
-      });
+      .then(deserializeResponse);
   };
 }
 
@@ -493,12 +561,25 @@ function createUseStep(ctx: WorkflowOrchestratorContext) {
         parseStepName(stepName)?.shortName ?? stepName,
         async () => {
           try {
-            return await (stepFn(...args) as Promise<Result>);
+            const result = await (stepFn(...args) as Promise<Result>);
+            // Native Response objects JSON-serialize to "{}" because their
+            // properties are non-enumerable getters.  Convert to a plain
+            // serializable form so Restate can journal it.
+            if (result instanceof Response) {
+              return await serializeResponse(result) as unknown as Result;
+            }
+            return result;
           } catch (err) {
             rethrowFatalAsTerminal(err);
           }
         }
-      );
+      ).then((result: Result) => {
+        // Reconstruct the Response on the way back into the VM.
+        if (isSerializedResponse(result)) {
+          return deserializeResponse(result) as unknown as Result;
+        }
+        return result;
+      });
     };
 
     // Ensure the "name" property matches the original step function name

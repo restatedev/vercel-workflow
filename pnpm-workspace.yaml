@@ -4,28 +4,17 @@ packages:
   - packages/examples/*
 
 catalog:
-  # Existing
-  zod: ^4.3.6
-  workflow: ^4.2.0-beta.70
-
-  # Restate SDK (all packages use same version)
-  "@restatedev/restate-sdk": 1.11.1
-  "@restatedev/restate-sdk-zod": 1.11.1
-  "@restatedev/restate-sdk-clients": 1.11.1
-  "@restatedev/restate-sdk-core": 1.11.1
-
-  # Workflow world
-  "@workflow/world": ^4.1.0-beta.12
-  "@workflow/core": ^4.2.0-beta.70
-  "@workflow/errors": ^4.1.0-beta.18
-
-  # Restate Pub/Sub
-  "@restatedev/pubsub": "0.3.2"
-  "@restatedev/pubsub-client": "0.3.2"
-
-  # Vercel
-  "@vercel/queue": 0.1.4
-
-  # Development dependencies
-  "@types/node": ^24.7.2
+  '@restatedev/pubsub': 0.3.2
+  '@restatedev/pubsub-client': 0.3.2
+  '@restatedev/restate-sdk': 1.11.1
+  '@restatedev/restate-sdk-clients': 1.11.1
+  '@restatedev/restate-sdk-core': 1.11.1
+  '@restatedev/restate-sdk-zod': 1.11.1
+  '@types/node': ^24.7.2
+  '@vercel/queue': 0.1.4
+  '@workflow/core': ^4.2.0-beta.70
+  '@workflow/errors': ^4.1.0-beta.18
+  '@workflow/world': ^4.1.0-beta.12
   typescript: ^5.9.3
+  workflow: ^4.2.0-beta.70
+  zod: 4.3.6

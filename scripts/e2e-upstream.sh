@@ -160,7 +160,7 @@ docker rm -f "$DOCKER_CONTAINER" 2>/dev/null || true
 
 DOCKER_ENV=""
 if [[ "$WORLD" == "restate" ]]; then
-  DOCKER_ENV="-e RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS=pause"
+  DOCKER_ENV="-e RESTATE_DEFAULT_RETRY_POLICY__MAX_ATTEMPTS=5 -e RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS=kill"
 fi
 
 # shellcheck disable=SC2086
@@ -192,6 +192,7 @@ export APP_NAME="$APP_NAME"
 
 case "$WORLD" in
   restate)
+    export WORKFLOW_TARGET_WORLD="@restatedev/workflow/world"
     export RESTATE_INGRESS="http://localhost:8080"
     ;;
   mongodb)
@@ -240,21 +241,34 @@ if [[ "$WORLD" == "restate" ]]; then
     DOCKER_HOST_ADDR="localhost"
   fi
 
-  log "Warming up .restate-well-known route (Turbopack compiles on-demand)..."
-  curl -s "http://localhost:3000/.restate-well-known" -o /dev/null || true
-  sleep 10
-
-  log "Registering dev server with Restate..."
-  for attempt in $(seq 1 5); do
-    if curl -f -X POST http://localhost:9070/deployments \
-      -H 'content-type: application/json' \
-      -d "{\"uri\": \"http://${DOCKER_HOST_ADDR}:3000/.restate-well-known\"}" 2>&1; then
-      echo ""
-      log_ok "Registered with Restate"
+  log "Waiting for deferred builder to generate flow route..."
+  for i in $(seq 1 60); do
+    if head -1 "workbench/$APP_NAME/app/.well-known/workflow/v1/flow/route.js" 2>/dev/null | grep -qv "STUB"; then
+      log_ok "Flow route generated"
       break
     fi
-    echo ""
-    log_warn "Registration attempt $attempt failed, retrying in 5s..."
+    if [[ "$i" -eq 60 ]]; then
+      log_err "Flow route still a stub after 120s"
+      head -3 "workbench/$APP_NAME/app/.well-known/workflow/v1/flow/route.js" || true
+    fi
+    sleep 2
+  done
+
+  log "Warming up .restate-well-known route (Turbopack compiles on-demand)..."
+  curl -s "http://localhost:3000/.restate-well-known" -o /dev/null || true
+  sleep 5
+
+  log "Registering dev server with Restate..."
+  for attempt in $(seq 1 10); do
+    HTTP_CODE=$(curl -s -o /tmp/restate-register.json -w "%{http_code}" -X POST http://localhost:9070/deployments \
+      -H 'content-type: application/json' \
+      -d "{\"uri\": \"http://${DOCKER_HOST_ADDR}:3000/.restate-well-known\", \"use_http_11\": true}" 2>&1)
+    BODY=$(cat /tmp/restate-register.json 2>/dev/null)
+    if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "201" ]]; then
+      log_ok "Registered with Restate (HTTP $HTTP_CODE)"
+      break
+    fi
+    log_warn "Registration attempt $attempt failed (HTTP $HTTP_CODE): $BODY"
     sleep 5
   done
 fi

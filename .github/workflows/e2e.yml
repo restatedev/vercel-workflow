@@ -207,6 +207,7 @@ jobs:
           RESTATE_INGRESS: "http://localhost:8080"
           WORKFLOW_PUBLIC_MANIFEST: "1"
           WORKFLOW_SERVICE_URL: "http://localhost:3000"
+          WORKFLOW_TARGET_WORLD: "@restatedev/workflow/world"
         run: |
           cd workbench/${{ env.APP_NAME }} && pnpm dev > ../../server-restate.log 2>&1 &
           echo "Waiting for dev server..."
@@ -218,21 +219,34 @@ jobs:
             sleep 2
           done
 
-          echo "Warming up .restate-well-known route (Turbopack compiles on-demand)..."
-          curl -s http://localhost:3000/.restate-well-known -o /dev/null || true
-          sleep 10
-
-          echo "Registering with Restate..."
-          for attempt in $(seq 1 5); do
-            if curl -f -X POST http://localhost:9070/deployments \
-              -H 'content-type: application/json' \
-              -d '{"uri": "http://localhost:3000/.restate-well-known"}' 2>&1; then
-              echo ""
-              echo "Registered with Restate"
+          echo "Waiting for deferred builder to generate flow route..."
+          for i in $(seq 1 60); do
+            if head -1 workbench/${{ env.APP_NAME }}/app/.well-known/workflow/v1/flow/route.js 2>/dev/null | grep -qv "STUB"; then
+              echo "Flow route generated"
               break
             fi
-            echo ""
-            echo "Registration attempt $attempt failed, retrying in 5s..."
+            if [ "$i" -eq 60 ]; then
+              echo "WARNING: Flow route still a stub after 120s"
+              head -3 workbench/${{ env.APP_NAME }}/app/.well-known/workflow/v1/flow/route.js || true
+            fi
+            sleep 2
+          done
+
+          echo "Warming up .restate-well-known route (Turbopack compiles on-demand)..."
+          curl -s http://localhost:3000/.restate-well-known -o /dev/null || true
+          sleep 5
+
+          echo "Registering with Restate..."
+          for attempt in $(seq 1 10); do
+            HTTP_CODE=$(curl -s -o /tmp/restate-register.json -w "%{http_code}" -X POST http://localhost:9070/deployments \
+              -H 'content-type: application/json' \
+              -d '{"uri": "http://localhost:3000/.restate-well-known", "use_http_11": true}' 2>&1)
+            BODY=$(cat /tmp/restate-register.json 2>/dev/null)
+            if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+              echo "Registered with Restate (HTTP $HTTP_CODE)"
+              break
+            fi
+            echo "Registration attempt $attempt failed (HTTP $HTTP_CODE): $BODY"
             sleep 5
           done
 
