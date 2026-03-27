@@ -136,21 +136,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    services:
-      restate:
-        image: docker.io/restatedev/restate:1.5.3
-        ports:
-          - 8080:8080
-          - 9070:9070
-        env:
-          RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS: pause
-        options: >-
-          --health-cmd "curl -f http://localhost:9070/health || exit 1"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 15
-
     steps:
+      - name: Start Restate server
+        run: |
+          docker run -d --name restate-e2e \
+            --network host \
+            -e RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS=pause \
+            docker.io/restatedev/restate:1.5.3
+          echo "Waiting for Restate to be ready..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:9070/health > /dev/null 2>&1; then
+              echo "Restate is ready"
+              break
+            fi
+            sleep 2
+          done
+
       - name: Restore upstream
         uses: actions/cache/restore@v4
         with:
