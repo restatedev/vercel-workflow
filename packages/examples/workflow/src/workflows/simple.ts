@@ -4,17 +4,17 @@
  */
 
 export async function add(a: number, b: number): Promise<number> {
-  'use step';
+  "use step";
   return a + b;
 }
 
 export async function multiply(a: number, b: number): Promise<number> {
-  'use step';
+  "use step";
   return a * b;
 }
 
 export async function calculateWorkflow(x: number, y: number) {
-  'use workflow';
+  "use workflow";
 
   const sum = await add(x, y);
   const product = await multiply(x, y);

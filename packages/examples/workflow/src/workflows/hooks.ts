@@ -1,12 +1,12 @@
-import { createHook } from 'workflow';
+import { createHook } from "workflow";
 
 async function processApproval(approved: boolean) {
-  'use step';
-  return await Promise.resolve(approved ? 'approved' : 'rejected');
+  "use step";
+  return await Promise.resolve(approved ? "approved" : "rejected");
 }
 
 export async function hookWorkflow(documentId: string) {
-  'use workflow';
+  "use workflow";
 
   using hook = createHook<{ approved: boolean; reviewer: string }>({
     token: `approval:${documentId}`,

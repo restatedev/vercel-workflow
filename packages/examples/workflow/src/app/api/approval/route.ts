@@ -9,7 +9,7 @@ export async function PUT(request: Request) {
     comment: string;
   };
 
-  console.info(JSON.stringify(approvalHook))
+  console.info(JSON.stringify(approvalHook));
 
   await approvalHook.resume(token, { approved, comment });
 

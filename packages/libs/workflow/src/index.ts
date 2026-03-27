@@ -54,7 +54,8 @@ interface StandardSchema<_TInput, TOutput> {
       | { value: TOutput; issues?: undefined }
       | { issues: readonly unknown[] }
       | Promise<
-          { value: TOutput; issues?: undefined } | { issues: readonly unknown[] }
+          | { value: TOutput; issues?: undefined }
+          | { issues: readonly unknown[] }
         >;
   };
 }

@@ -101,12 +101,10 @@ export function createWorld(): World {
       const payload = message as { runId: string };
 
       // Submit the workflow run (fire-and-forget — submit awaits completion internally)
-      await restate
-        .objectSendClient(workflowRunObj, payload.runId)
-        .submit({
-          idempotencyKey: opts?.idempotencyKey,
-          delaySeconds: opts?.delaySeconds,
-        });
+      await restate.objectSendClient(workflowRunObj, payload.runId).submit({
+        idempotencyKey: opts?.idempotencyKey,
+        delaySeconds: opts?.delaySeconds,
+      });
 
       return { messageId: payload.runId as MessageId };
     },
@@ -156,7 +154,9 @@ export function createWorld(): World {
             }
           ).eventData;
 
-          const serviceName = parseWorkflowName(eventData.workflowName)?.shortName ?? eventData.workflowName;
+          const serviceName =
+            parseWorkflowName(eventData.workflowName)?.shortName ??
+            eventData.workflowName;
 
           // Deserialize input from Vercel's binary format to raw JSON
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -183,12 +183,10 @@ export function createWorld(): World {
         }
 
         if (eventType === "hook_received" && runId) {
-          const eventData = (
-            data as {
-              correlationId: string;
-              eventData: { payload: unknown };
-            }
-          );
+          const eventData = data as {
+            correlationId: string;
+            eventData: { payload: unknown };
+          };
           // The payload was serialized by Vercel's dehydrateStepReturnValue.
           // Deserialize it back to the raw value before sending to Restate.
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -212,9 +210,7 @@ export function createWorld(): World {
 
           // Forward to Restate's workflowHooks virtual object
           const token = eventData.correlationId;
-          await restate
-            .objectClient(hookObj, token)
-            .resolve(rawPayload);
+          await restate.objectClient(hookObj, token).resolve(rawPayload);
           return {};
         }
 
@@ -234,9 +230,7 @@ export function createWorld(): World {
       },
 
       get: notImplemented("events.get") as unknown as World["events"]["get"],
-      list: notImplemented(
-        "events.list"
-      ) as unknown as World["events"]["list"],
+      list: notImplemented("events.list") as unknown as World["events"]["list"],
       listByCorrelationId: notImplemented(
         "events.listByCorrelationId"
       ) as unknown as World["events"]["listByCorrelationId"],
@@ -253,9 +247,7 @@ export function createWorld(): World {
 
     hooks: {
       async get(hookId: string) {
-        const hookData = await restate
-          .objectClient(hookObj, hookId)
-          .get();
+        const hookData = await restate.objectClient(hookObj, hookId).get();
         if (!hookData) {
           throw new Error(`Hook ${hookId} not found`);
         }
@@ -267,9 +259,7 @@ export function createWorld(): World {
         };
       },
       async getByToken(token: string) {
-        const hookData = await restate
-          .objectClient(hookObj, token)
-          .get();
+        const hookData = await restate.objectClient(hookObj, token).get();
         if (!hookData) {
           throw new Error(`Hook with token ${token} not found`);
         }

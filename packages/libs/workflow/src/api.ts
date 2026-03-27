@@ -6,7 +6,10 @@ import {
 } from "@workflow/core/runtime";
 import type { WorkflowRunStatus } from "@workflow/world";
 import * as clients from "@restatedev/restate-sdk-clients";
-import { WorkflowRunCancelledError, WorkflowRunFailedError } from "@workflow/errors";
+import {
+  WorkflowRunCancelledError,
+  WorkflowRunFailedError,
+} from "@workflow/errors";
 import { hookObj, sleepObj, workflowRunObj } from "./runtime.js";
 import { TerminalError } from "@restatedev/restate-sdk/fetch";
 import type { HookMetadata } from "./index.js";
@@ -37,9 +40,7 @@ function getIngressUrl(): string {
  * events API.
  */
 export class Run<TResult> extends CoreRun<TResult> {
-  override async wakeUp(
-    options?: StopSleepOptions
-  ): Promise<StopSleepResult> {
+  override async wakeUp(options?: StopSleepOptions): Promise<StopSleepResult> {
     const restate = clients.connect({ url: getIngressUrl() });
     const pending = await restate
       .objectClient(sleepObj, this.runId)
@@ -68,9 +69,7 @@ export class Run<TResult> extends CoreRun<TResult> {
 
   private async fetchStatus(): Promise<WorkflowRunStatus> {
     const restate = clients.connect({ url: getIngressUrl() });
-    const data = await restate
-      .objectClient(workflowRunObj, this.runId)
-      .get();
+    const data = await restate.objectClient(workflowRunObj, this.runId).get();
     if (!data) {
       throw new Error(`Workflow run ${this.runId} not found`);
     }
@@ -83,9 +82,7 @@ export class Run<TResult> extends CoreRun<TResult> {
 
   private async checkExists(): Promise<boolean> {
     const restate = clients.connect({ url: getIngressUrl() });
-    const data = await restate
-      .objectClient(workflowRunObj, this.runId)
-      .get();
+    const data = await restate.objectClient(workflowRunObj, this.runId).get();
     return data !== null;
   }
 
@@ -96,14 +93,14 @@ export class Run<TResult> extends CoreRun<TResult> {
   private async attachReturnValue(): Promise<TResult> {
     const restate = clients.connect({ url: getIngressUrl() });
     try {
-      return await restate
+      return (await restate
         .objectClient(workflowRunObj, this.runId)
-        .awaitResult() as TResult;
+        .awaitResult()) as TResult;
     } catch (err) {
       if (err instanceof TerminalError && err.code === 409) {
         throw new WorkflowRunCancelledError(this.runId);
       }
-     if (err instanceof TerminalError) {
+      if (err instanceof TerminalError) {
         throw new WorkflowRunFailedError(this.runId, {
           message: err.message ?? "Unknown error",
         });
