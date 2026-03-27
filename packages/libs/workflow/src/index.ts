@@ -46,7 +46,7 @@ export interface TypedHook<TInput, TOutput> {
  * Standard Schema v1 compatible interface.
  * Accepts any schema that implements the Standard Schema spec (Zod, Valibot, ArkType, etc.)
  */
-interface StandardSchema<_TInput, TOutput> {
+export interface StandardSchema<_TInput, TOutput> {
   "~standard": {
     validate(
       value: unknown
