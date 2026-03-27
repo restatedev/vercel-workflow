@@ -22,6 +22,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./api": {
+      "import": "./dist/api.js",
+      "require": "./dist/api.cjs"
+    },
     "./internal/private": {
       "import": "./dist/internal/private.js",
       "require": "./dist/internal/private.cjs"
@@ -29,6 +33,10 @@
     "./runtime": {
       "import": "./dist/runtime.js",
       "require": "./dist/runtime.cjs"
+    },
+    "./world": {
+      "import": "./dist/world.js",
+      "require": "./dist/world.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -56,27 +64,26 @@
     "prepublishOnly": "pnpm -w verify"
   },
   "peerDependencies": {
-    "@workflow/world": "catalog:",
-    "@workflow/core": "catalog:",
-    "@workflow/errors": "catalog:",
+    "@restatedev/pubsub-client": "catalog:",
     "@restatedev/restate-sdk": "catalog:",
     "@restatedev/restate-sdk-zod": "catalog:",
-    "@restatedev/pubsub-client": "catalog:",
     "@vercel/queue": "catalog:",
+    "@workflow/core": "catalog:",
+    "@workflow/errors": "catalog:",
+    "@workflow/world": "catalog:",
+    "ms": "^2.1.0",
     "workflow": "catalog:",
     "zod": "catalog:"
   },
-  "dependencies": {
-    "ms": "^2.1.3"
-  },
   "devDependencies": {
-    "@types/ms": "^2.1.0",
-    "@workflow/world": "catalog:",
-    "@workflow/errors": "catalog:",
-    "@restatedev/restate-sdk-clients": "catalog:",
-    "@restatedev/restate-sdk-zod": "catalog:",
     "@restatedev/pubsub-client": "catalog:",
+    "@restatedev/restate-sdk-clients": "catalog:",
+    "@restatedev/restate-sdk-testcontainers": "^1.11.1",
+    "@restatedev/restate-sdk-zod": "catalog:",
+    "@types/ms": "^2.1.0",
     "@vercel/queue": "catalog:",
+    "@workflow/errors": "catalog:",
+    "@workflow/world": "catalog:",
     "workflow": "catalog:",
     "zod": "catalog:"
   }

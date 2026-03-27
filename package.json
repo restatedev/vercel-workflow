@@ -10,7 +10,6 @@
     "build": "turbo run _build --filter=\"./packages/libs/*\"",
     "build:all": "turbo run _build",
     "dev": "pnpm --filter \"./packages/libs/*\" --parallel dev",
-    "test": "turbo run _test",
     "test:watch": "vitest watch",
     "lint": "turbo run lint",
     "format": "prettier --write .",
@@ -32,7 +31,8 @@
     "deps:update": "pnpm update --latest --recursive",
     "inspect": "pnpm --filter \"./packages/examples/*\" inspect",
     "prepackage": "pnpm install && pnpm clean && pnpm build",
-    "package": "pnpm --filter \"./packages/libs/workflow\" pack"
+    "package": "pnpm --filter \"./packages/libs/workflow\" pack",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",

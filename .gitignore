@@ -9,3 +9,7 @@ dist
 .restate
 restatedev-workflow*
 .idea
+package/*
+.upstream
+.tarballs
+.workflow-data

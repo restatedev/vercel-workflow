@@ -51,3 +51,12 @@ The service logs print the hook token. You can use it to resolve the hook:
 ```shell
 curl -X POST http://localhost:8080/workflowHooks/your-hook-token-123/resolve --json '{"message": "hello"}'
 ```
+
+
+## What this adds on top of Vercel Workflow
+
+
+You can supply to start():
+- Delayed execution
+- Idempotency 
+
