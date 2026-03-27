@@ -12,3 +12,4 @@ restatedev-workflow*
 package/*
 .upstream
 .tarballs
+.workflow-data

@@ -188,7 +188,9 @@ jobs:
           pnpm --filter ${{ env.APP_NAME }} add "$TARBALL"
 
       - name: Patch workbench for Restate
-        run: node .tarballs/patch-upstream-workbench.cjs .upstream/workbench/${{ env.APP_NAME }}
+        run: |
+          node .tarballs/patch-upstream-workbench.cjs .upstream/workbench/${{ env.APP_NAME }}
+          rm -rf .upstream/workbench/${{ env.APP_NAME }}/.next
 
       - name: Resolve symlinks
         working-directory: .upstream

@@ -106,13 +106,13 @@ Manages the lifecycle of a single workflow run.
 
 Tracks pending sleeps for a workflow run so `wakeUp()` can find and resolve them.
 
-**State**: `{ pending: SleepEntry[] }` where `SleepEntry = { correlationId, awakeableId }`.
+**State**: `{ pending: SleepEntry[] }` where `SleepEntry = { awakeableId }`.
 
 | Handler | Type | Purpose |
 |---------|------|---------|
 | `register` | exclusive | Adds a sleep entry to the pending list |
 | `complete` | exclusive | Removes a sleep entry (called after the race resolves) |
-| `wakeUp` | exclusive | Resolves the awakeable for a given correlationId, removes entry |
+| `wakeUp` | exclusive | Resolves the awakeable for a given awakeableId, removes entry |
 | `getPending` | shared | Returns the pending list (used by `Run.wakeUp()` to discover sleeps) |
 
 ### `workflowHooks` (keyed by hook token)
@@ -144,13 +144,11 @@ Restate's `ctx.run()` is a journaled side effect: execute once, store the result
 
 `sleep(duration)` → `RestatePromise.race([ctx.sleep(millis), awakeable])`.
 
-Each sleep creates both a durable timer and an awakeable, then races them. The awakeable is registered in the `workflowSleep` virtual object so that `wakeUp()` can resolve it to end the sleep early.
+Each sleep creates both a durable timer and an awakeable, then races them. The awakeable is registered in the `workflowSleep` virtual object so that `wakeUp()` can resolve it to end the sleep early. The awakeable ID itself serves as the unique identifier for each sleep — no separate correlation ID is needed.
 
 On completion (either timer or wakeUp), a fire-and-forget `complete` call removes the entry from the virtual object.
 
 **Duration parsing**: Supports `number` (ms), `string` (parsed by the `ms` library: `"5s"`, `"1h"`, `"24h"`), and `Date` (duck-typed via `.getTime()` because VM Date objects have a different prototype).
-
-**Correlation IDs**: Each sleep gets a deterministic `correlationId` via `ctx.rand.uuidv4()` (deterministic for replay safety). This is how `wakeUp({ correlationIds: [...] })` targets specific sleeps.
 
 ### Durable Fetch
 
@@ -242,8 +240,8 @@ The World is the bridge between the Vercel SDK's lifecycle events and Restate's 
 
 1. User calls `run.wakeUp(options?)` (our override)
 2. Calls `workflowSleep/{runId}/getPending` to discover registered sleeps
-3. Optionally filters by `correlationIds`
-4. For each target: calls `workflowSleep/{runId}/wakeUp({ correlationId })`
+3. Optionally filters by `awakeableIds`
+4. For each target: calls `workflowSleep/{runId}/wakeUp({ awakeableId })`
 5. The handler resolves the awakeable, which wins the `RestatePromise.race` in the sleeping workflow
 6. The workflow continues past the `sleep()` call
 

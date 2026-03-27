@@ -142,6 +142,8 @@ cd "$WORKDIR"
 if [[ "$WORLD" == "restate" ]]; then
   log "Patching workbench for Restate..."
   node "$REPO_ROOT/scripts/patch-upstream-workbench.cjs" "workbench/$APP_NAME"
+  # Clear .next cache — stale cache prevents the deferred builder from generating routes
+  rm -rf "workbench/$APP_NAME/.next"
 fi
 
 # --- Step 6: Resolve symlinks ---
