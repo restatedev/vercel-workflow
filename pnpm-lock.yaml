@@ -101,6 +101,9 @@ importers:
       '@restatedev/workflow':
         specifier: workspace:*
         version: link:../../libs/workflow
+      ms:
+        specifier: ^2.1.0
+        version: 2.1.3
       next:
         specifier: 16.0.0
         version: 16.0.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -108,6 +111,9 @@ importers:
         specifier: 'catalog:'
         version: 4.2.0-beta.70(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.17(@nestjs/common@11.1.17(reflect-metadata@0.2.2)(rxjs@7.8.2))(reflect-metadata@0.2.2)(rxjs@7.8.2))(@swc/cli@0.8.0(@swc/core@1.15.3)(chokidar@5.0.0))(@swc/core@1.15.3)(next@16.0.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(typescript@5.9.3)
     devDependencies:
+      '@types/ms':
+        specifier: ^2.1.0
+        version: 2.1.0
       '@types/node':
         specifier: 'catalog:'
         version: 24.7.2
@@ -127,7 +133,7 @@ importers:
         specifier: 'catalog:'
         version: 4.2.0-beta.70
       ms:
-        specifier: ^2.1.3
+        specifier: ^2.1.0
         version: 2.1.3
     devDependencies:
       '@restatedev/pubsub-client':

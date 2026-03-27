@@ -22,6 +22,10 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./api": {
+      "import": "./dist/api.js",
+      "require": "./dist/api.cjs"
+    },
     "./internal/private": {
       "import": "./dist/internal/private.js",
       "require": "./dist/internal/private.cjs"
@@ -29,6 +33,10 @@
     "./runtime": {
       "import": "./dist/runtime.js",
       "require": "./dist/runtime.cjs"
+    },
+    "./world": {
+      "import": "./dist/world.js",
+      "require": "./dist/world.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -64,10 +72,8 @@
     "@restatedev/pubsub-client": "catalog:",
     "@vercel/queue": "catalog:",
     "workflow": "catalog:",
-    "zod": "catalog:"
-  },
-  "dependencies": {
-    "ms": "^2.1.3"
+    "zod": "catalog:",
+    "ms": "^2.1.0"
   },
   "devDependencies": {
     "@types/ms": "^2.1.0",

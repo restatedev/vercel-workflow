@@ -30,7 +30,16 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   }
 
   return NextResponse.json({
-    status: await run.status,
+    status,
     result: res,
   });
+}
+
+export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+  const { runId } = await params;
+
+  const run = getRun(runId);
+  await run.cancel();
+
+  return NextResponse.json({ cancelled: true });
 }
