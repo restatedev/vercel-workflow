@@ -122,6 +122,10 @@ log "Upstream pnpm version: $UPSTREAM_PNPM_VERSION"
 npm i -g "pnpm@${UPSTREAM_PNPM_VERSION}" 2>/dev/null || true
 pnpm install --frozen-lockfile
 
+# Build upstream packages (needed so workflow/dist/next.cjs etc. exist)
+log "Building upstream packages..."
+pnpm turbo run build --filter='!./workbench/*'
+
 # --- Step 4: Install world package into workbench ---
 log "Installing $WORLD world into workbench..."
 cd "workbench/$APP_NAME"
@@ -182,6 +186,7 @@ export WORKFLOW_PUBLIC_MANIFEST=1
 export DEPLOYMENT_URL="http://localhost:3000"
 export WORKFLOW_SERVICE_URL="http://localhost:3000"
 export NODE_OPTIONS="--enable-source-maps"
+export APP_NAME="$APP_NAME"
 
 case "$WORLD" in
   restate)
@@ -226,7 +231,6 @@ done
 
 # --- Step 10: Register with Restate (Restate only) ---
 if [[ "$WORLD" == "restate" ]]; then
-  log "Registering dev server with Restate..."
   # Detect Docker host address
   if [[ "$(uname)" == "Darwin" ]]; then
     DOCKER_HOST_ADDR="host.docker.internal"
@@ -234,12 +238,23 @@ if [[ "$WORLD" == "restate" ]]; then
     DOCKER_HOST_ADDR="localhost"
   fi
 
-  curl -sf -X POST http://localhost:9070/deployments \
-    -H 'content-type: application/json' \
-    -d "{\"uri\": \"http://${DOCKER_HOST_ADDR}:3000/.restate-well-known\"}" \
-    > /dev/null
+  log "Warming up .restate-well-known route (Turbopack compiles on-demand)..."
+  curl -s "http://localhost:3000/.restate-well-known" -o /dev/null || true
+  sleep 10
 
-  log_ok "Registered with Restate"
+  log "Registering dev server with Restate..."
+  for attempt in $(seq 1 5); do
+    if curl -f -X POST http://localhost:9070/deployments \
+      -H 'content-type: application/json' \
+      -d "{\"uri\": \"http://${DOCKER_HOST_ADDR}:3000/.restate-well-known\"}" 2>&1; then
+      echo ""
+      log_ok "Registered with Restate"
+      break
+    fi
+    echo ""
+    log_warn "Registration attempt $attempt failed, retrying in 5s..."
+    sleep 5
+  done
 fi
 
 # --- Step 11: Run e2e tests ---

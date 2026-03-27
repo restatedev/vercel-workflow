@@ -216,10 +216,23 @@ jobs:
             sleep 2
           done
 
+          echo "Warming up .restate-well-known route (Turbopack compiles on-demand)..."
+          curl -s http://localhost:3000/.restate-well-known -o /dev/null || true
+          sleep 10
+
           echo "Registering with Restate..."
-          curl -sf -X POST http://localhost:9070/deployments \
-            -H 'content-type: application/json' \
-            -d '{"uri": "http://localhost:3000/.restate-well-known"}'
+          for attempt in $(seq 1 5); do
+            if curl -f -X POST http://localhost:9070/deployments \
+              -H 'content-type: application/json' \
+              -d '{"uri": "http://localhost:3000/.restate-well-known"}' 2>&1; then
+              echo ""
+              echo "Registered with Restate"
+              break
+            fi
+            echo ""
+            echo "Registration attempt $attempt failed, retrying in 5s..."
+            sleep 5
+          done
 
           cd ../..
           pnpm vitest run packages/core/e2e/e2e.test.ts \
