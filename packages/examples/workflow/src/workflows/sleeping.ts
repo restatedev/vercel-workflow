@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/require-await */
 import { sleep } from "workflow";
 
 async function prepareData(input: string) {

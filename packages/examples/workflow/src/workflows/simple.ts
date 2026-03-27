@@ -1,14 +1,15 @@
+/* eslint-disable @typescript-eslint/require-await */
 /**
  * Simple workflow example for testing the vitest plugin.
  * This file contains both "use workflow" and "use step" directives.
  */
 
-export async function add(a: number, b: number): Promise<number> {
+export function add(a: number, b: number): Promise<number> {
   "use step";
   return a + b;
 }
 
-export async function multiply(a: number, b: number): Promise<number> {
+export function multiply(a: number, b: number): Promise<number> {
   "use step";
   return a * b;
 }

@@ -161,7 +161,7 @@ export const workflowRunObj = object({
 
       // Await workflow completion
       try {
-        const output = await ctx.attach(invocationId, serde.json);
+        const output: unknown = await ctx.attach(invocationId, serde.json);
         ctx.set("data", {
           ...runningData,
           status: "completed" as const,
@@ -219,7 +219,7 @@ export const workflowRunObj = object({
         }
 
         const invocationId = InvocationIdParser.fromString(data.invocationId);
-        return await ctx.attach(invocationId, serde.json);
+        return (await ctx.attach(invocationId, serde.json)) as unknown;
       }
     ),
 
@@ -414,7 +414,7 @@ function createContext(restateCtx: Context) {
 
   // Polyfill Symbol.dispose / Symbol.asyncDispose inside the VM so the
   // compiled `using` keyword works (Node < 20.4 lacks these).
-  const vmSymbol = g.Symbol as unknown as Record<string, unknown>;
+  const vmSymbol = g.Symbol as Record<string, unknown>;
   if (!vmSymbol["dispose"]) {
     vmSymbol["dispose"] = Symbol.for("Symbol.dispose");
   }

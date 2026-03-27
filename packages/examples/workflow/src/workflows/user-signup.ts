@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await */
 
-import { createHook, defineHook, getWorkflowMetadata, sleep } from "workflow";
+import { defineHook, sleep } from "workflow";
 
 // Define a typed hook — the same definition is used both inside the workflow
 // (.create()) and from API routes (.resume()) for end-to-end type safety.
