@@ -726,3 +726,39 @@ export const hookObj = object({
     },
   },
 });
+
+// ---------------------------------------------------------------------------
+// World management — exports expected by the upstream `workflow/runtime` module.
+// When the upstream workbench app's instrumentation.ts does:
+//   import('workflow/runtime').then(({ getWorld }) => getWorld().start?.())
+// and the Turbopack alias points `workflow/runtime` → `@restatedev/workflow/runtime`,
+// these exports satisfy that contract.
+// ---------------------------------------------------------------------------
+
+import { createWorld as _createWorld } from "./world.js";
+import type { World } from "@workflow/world";
+
+const WorldCache = Symbol.for("@workflow/world//cache");
+const globalSymbols = globalThis as unknown as Record<symbol, World | undefined>;
+
+export { _createWorld as createWorld };
+
+export function getWorld(): World {
+  if (globalSymbols[WorldCache]) return globalSymbols[WorldCache]!;
+  globalSymbols[WorldCache] = _createWorld();
+  return globalSymbols[WorldCache]!;
+}
+
+export function setWorld(world: World | undefined): void {
+  globalSymbols[WorldCache] = world;
+}
+
+export function getWorldHandlers(): Pick<World, "createQueueHandler"> {
+  const w = getWorld();
+  return { createQueueHandler: w.createQueueHandler };
+}
+
+export function healthCheck(): Promise<{ ok: boolean }> {
+  // No-op for Restate — the Restate server handles health checks natively.
+  return Promise.resolve({ ok: true });
+}

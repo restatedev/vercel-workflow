@@ -10,3 +10,5 @@ dist
 restatedev-workflow*
 .idea
 package/*
+.upstream
+.tarballs
