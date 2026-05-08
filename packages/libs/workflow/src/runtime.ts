@@ -2,6 +2,7 @@ import {
   Context,
   createEndpointHandler,
   handlers,
+  internal,
   object,
   ObjectContext,
   ObjectSharedContext,
@@ -95,7 +96,53 @@ export interface WorkflowRunData {
   invocationId?: string;
 }
 
-type WorkflowRunState = { data: WorkflowRunData };
+type SubmitOpts = { idempotencyKey?: string; delaySeconds?: number };
+
+type WorkflowRunState = {
+  data: WorkflowRunData;
+  // When submit arrives before create (events.create and queue() race in
+  // upstream's start path), we record the request here. create then picks
+  // it up and dispatches the workflow.
+  pendingSubmit: SubmitOpts;
+};
+
+// Internal helper: dispatch the workflow service and store invocationId.
+// Caller must already hold the exclusive lock on this key (so it's safe
+// to read+write state synchronously). Returns the running state.
+async function dispatchWorkflow(
+  ctx: ObjectContext<WorkflowRunState>,
+  data: WorkflowRunData,
+  opts: SubmitOpts
+): Promise<WorkflowRunData> {
+  const handle = ctx.genericSend({
+    service: data.serviceName,
+    method: "run",
+    parameter: {
+      serviceName: data.serviceName,
+      payload: data.serializedInput,
+      runId: ctx.key,
+      workflowName: data.workflowName,
+    },
+    inputSerde: serde.json,
+    ...(opts.delaySeconds ? { delay: opts.delaySeconds * 1000 } : {}),
+    ...(opts.idempotencyKey ? { idempotencyKey: opts.idempotencyKey } : {}),
+  });
+
+  const invocationId = await handle.invocationId;
+  const runningData: WorkflowRunData = {
+    ...data,
+    invocationId: invocationId.toString(),
+    status: "running" as const,
+  };
+  ctx.set("data", runningData);
+
+  // Spawn waitForCompletion as a separate invocation on the same key. It will
+  // run after the current handler returns (Restate FIFOs invocations per key)
+  // and update status when the workflow finishes.
+  ctx.objectSendClient(workflowRunObj, ctx.key).waitForCompletion();
+
+  return runningData;
+}
 
 export const workflowRunObj = object({
   name: "workflowRun",
@@ -104,6 +151,10 @@ export const workflowRunObj = object({
       ctx: ObjectContext<WorkflowRunState>,
       input: { workflowName: string; serviceName: string; input: string }
     ): Promise<WorkflowRunData> => {
+      // create is idempotent: if state already exists, return it.
+      const existing = await ctx.get("data");
+      if (existing) return existing;
+
       const data: WorkflowRunData = {
         runId: ctx.key,
         workflowName: input.workflowName,
@@ -113,41 +164,48 @@ export const workflowRunObj = object({
         serializedInput: input.input,
       };
       ctx.set("data", data);
+
+      // If submit raced ahead of us, dispatch now.
+      const pending = await ctx.get("pendingSubmit");
+      if (pending) {
+        ctx.clear("pendingSubmit");
+        return dispatchWorkflow(ctx, data, pending);
+      }
+
       return data;
     },
 
     submit: async (
       ctx: ObjectContext<WorkflowRunState>,
-      input: { idempotencyKey?: string; delaySeconds?: number }
+      input: SubmitOpts
     ) => {
       const data = await ctx.get("data");
       if (!data) {
-        throw new TerminalError(
-          `workflowRun/${ctx.key}/submit: missing state — create was not called.`
-        );
+        // Race: create hasn't run yet. Record the request and let create
+        // dispatch when it arrives. Returning normally avoids the retry storm
+        // we'd otherwise get from a non-terminal "missing state" error.
+        ctx.set("pendingSubmit", input);
+        return;
       }
 
       // Idempotent: skip if already submitted
       if (data.status !== "pending") return;
 
-      const handle = ctx.genericSend({
-        service: data.serviceName,
-        method: "run",
-        parameter: { serviceName: data.serviceName, payload: data.serializedInput, runId: ctx.key, workflowName: data.workflowName },
-        inputSerde: serde.json,
-        ...(input.delaySeconds ? { delay: input.delaySeconds * 1000 } : {}),
-        ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
-      });
+      await dispatchWorkflow(ctx, data, input);
+    },
 
-      const invocationId = await handle.invocationId;
-      const runningData = { ...data, invocationId: invocationId.toString(), status: "running" as const };
-      ctx.set("data", runningData);
+    waitForCompletion: async (
+      ctx: ObjectContext<WorkflowRunState>
+    ): Promise<void> => {
+      const data = await ctx.get("data");
+      if (!data?.invocationId) return;
+      if (data.status !== "running") return;
 
-      // Await workflow completion
+      const invocationId = InvocationIdParser.fromString(data.invocationId);
       try {
         const output = await ctx.attach(invocationId, serde.json);
         ctx.set("data", {
-          ...runningData,
+          ...data,
           status: "completed" as const,
           output,
           completedAt: await ctx.date.now(),
@@ -155,9 +213,18 @@ export const workflowRunObj = object({
       } catch (err) {
         const completedAt = await ctx.date.now();
         if (err instanceof TerminalError && err.code === 409) {
-          ctx.set("data", { ...runningData, status: "cancelled" as const, completedAt });
+          ctx.set("data", {
+            ...data,
+            status: "cancelled" as const,
+            completedAt,
+          });
         } else if (err instanceof TerminalError) {
-          ctx.set("data", { ...runningData, status: "failed" as const, error: err.message, completedAt });
+          ctx.set("data", {
+            ...data,
+            status: "failed" as const,
+            error: err.message,
+            completedAt,
+          });
         } else {
           throw err; // Non-terminal → let Restate retry
         }
@@ -171,16 +238,25 @@ export const workflowRunObj = object({
     ),
 
     // Wait for the workflow invocation to complete and return the final state.
-    // Shared so it can run concurrently with the exclusive submit handler.
+    // Shared so it can run concurrently with the exclusive create / submit /
+    // waitForCompletion handlers.
     awaitResult: handlers.object.shared(
       async (ctx: ObjectSharedContext<WorkflowRunState>) => {
+        // The caller may invoke awaitResult before events.create has finished
+        // (start.ts fires events.create and queue() in parallel and returns
+        // the run handle eagerly). Poll for state to appear before failing.
         let data = await ctx.get("data");
-
+        let waited = 0;
+        while (!data && waited < 30_000) {
+          await ctx.sleep(100);
+          waited += 100;
+          data = await ctx.objectClient(workflowRunObj, ctx.key).get();
+        }
         if (!data) {
           throw new TerminalError(`Workflow run ${ctx.key} not found`);
         }
 
-        // Wait for submit to set the invocationId (handles create→submit race)
+        // Wait for create/submit to dispatch (handles create↔submit race)
         while (data.status === "pending") {
           await ctx.sleep(100);
           data = (await ctx.objectClient(workflowRunObj, ctx.key).get()) ?? data;
@@ -282,7 +358,12 @@ async function restateHandler(
       restateCtx,
     };
 
-    const useStep = createUseStep(workflowContext);
+    const startTimeMs = await restateCtx.date.now();
+    const useStep = createUseStep(workflowContext, runId, {
+      workflowName,
+      serviceName,
+      workflowStartedAt: startTimeMs,
+    });
     const createHook = createCreateHook(workflowContext, runId);
     const sleep = createSleep(workflowContext, runId);
     const durableFetch = createDurableFetch(workflowContext);
@@ -303,13 +384,12 @@ async function restateHandler(
 
     // Set workflow metadata after we know the workflow name.
     // Getters are lazy so they're safe to read after this point.
-    const startTime = await restateCtx.date.now();
     // @ts-expect-error - `@types/node` says symbol is not valid, but it does work
     vmGlobalThis[WORKFLOW_CONTEXT] = {
       workflowRunId: runId,
       workflowName: workflowName,
       get workflowStartedAt() {
-        return startTime;
+        return new Date(startTimeMs);
       },
       get url(): string {
         const ingress = process.env["RESTATE_INGRESS"];
@@ -320,6 +400,9 @@ async function restateHandler(
         }
         return `${ingress.replace(/\/+$/, "")}/${serviceName}/run`;
       },
+      // Required by upstream's WorkflowMetadata shape. We don't implement
+      // World.getEncryptionKeyForRun, so encryption is never on.
+      features: { encryption: false },
     };
 
     const workflowsMap = vmGlobalThis.__private_workflows as
@@ -375,9 +458,9 @@ function createContext(restateCtx: Context) {
     vmSymbol["asyncDispose"] = Symbol.for("Symbol.asyncDispose");
   }
 
-  // Expose Web Streams globals needed by bundled library code (e.g. AI SDK's
-  // EventSourceParserStream). The upstream builder creates one monolithic bundle
-  // for all workflows, so transitive dependencies are unavoidable.
+  // Expose Web APIs / Web Streams globals needed by bundled library code
+  // (e.g. AI SDK's EventSourceParserStream). The upstream builder creates one
+  // monolithic bundle, so transitive dependencies are unavoidable.
   g.TransformStream = globalThis.TransformStream;
   g.ReadableStream = globalThis.ReadableStream;
   g.WritableStream = globalThis.WritableStream;
@@ -385,28 +468,14 @@ function createContext(restateCtx: Context) {
   g.Headers = globalThis.Headers;
   g.TextEncoder = globalThis.TextEncoder;
   g.TextDecoder = globalThis.TextDecoder;
-  g.console = globalThis.console;
   g.URL = globalThis.URL;
   g.URLSearchParams = globalThis.URLSearchParams;
   g.structuredClone = globalThis.structuredClone;
 
   // Propagate environment variables
-  (g as any).process = {
+  (g as Record<string, unknown>).process = {
     env: Object.freeze({ ...process.env }),
   };
-
-  // Stateless + synchronous Web APIs that are made available inside the sandbox
-  g.Headers = globalThis.Headers;
-  g.TextEncoder = globalThis.TextEncoder;
-  g.TextDecoder = globalThis.TextDecoder;
-  g.console = globalThis.console;
-  g.URL = globalThis.URL;
-  g.URLSearchParams = globalThis.URLSearchParams;
-  g.structuredClone = globalThis.structuredClone;
-
-  // TC39 Explicit Resource Management polyfill for `using` keyword
-  (g.Symbol as any).dispose ??= Symbol.for("Symbol.dispose");
-  (g.Symbol as any).asyncDispose ??= Symbol.for("Symbol.asyncDispose");
 
   return {
     context,
@@ -547,39 +616,116 @@ function createSleep(ctx: WorkflowOrchestratorContext, runId: string) {
   };
 }
 
-function createUseStep(ctx: WorkflowOrchestratorContext) {
+// workflow@5+ inlines step registration as an IIFE that writes to this global
+// symbol. The legacy ./internal/private path is no longer called.
+const REGISTERED_STEPS_SYMBOL = Symbol.for("@workflow/core//registeredSteps");
+
+type StepFn = (...args: unknown[]) => unknown;
+
+function getRegisteredSteps(): Map<string, StepFn> | undefined {
+  return (globalThis as unknown as Record<symbol, Map<string, StepFn>>)[
+    REGISTERED_STEPS_SYMBOL
+  ];
+}
+
+// Mirrors upstream's getStepIdAliasCandidates: tolerates ./workflows ↔ ./src/workflows
+// ↔ ./example/workflows path differences in mixed symlink environments.
+function stepIdAliases(stepId: string): string[] {
+  const parts = stepId.split("//");
+  if (parts.length !== 3 || parts[0] !== "step") return [];
+  const [, modulePath, fnName] = parts;
+  const aliases = new Set<string>();
+  const add = (p: string) => {
+    if (p !== modulePath) aliases.add(p);
+  };
+  if (modulePath!.startsWith("./workflows/")) {
+    const rel = modulePath!.slice("./".length);
+    add(`./example/${rel}`);
+    add(`./src/${rel}`);
+  } else if (modulePath!.startsWith("./example/workflows/")) {
+    const rel = modulePath!.slice("./example/".length);
+    add(`./${rel}`);
+    add(`./src/${rel}`);
+  } else if (modulePath!.startsWith("./src/workflows/")) {
+    const rel = modulePath!.slice("./src/".length);
+    add(`./${rel}`);
+    add(`./example/${rel}`);
+  }
+  return [...aliases].map((p) => `step//${p}//${fnName}`);
+}
+
+function lookupStep(stepId: string): StepFn | undefined {
+  const upstream = getRegisteredSteps();
+  if (upstream) {
+    const direct = upstream.get(stepId);
+    if (direct) return direct;
+    for (const alias of stepIdAliases(stepId)) {
+      const hit = upstream.get(alias);
+      if (hit) return hit;
+    }
+  }
+  return globalStepRegistry.get(stepId);
+}
+
+function listAvailableSteps(): string[] {
+  const upstream = getRegisteredSteps();
+  const keys = new Set<string>();
+  if (upstream) for (const k of upstream.keys()) keys.add(k);
+  for (const k of globalStepRegistry.keys()) keys.add(k);
+  return [...keys];
+}
+
+interface WorkflowMeta {
+  workflowName: string;
+  serviceName: string;
+  workflowStartedAt: number;
+}
+
+// step-side `getStepMetadata` / `getWorkflowMetadata` accessors are not
+// wired up. Upstream implements them via Node's AsyncLocalStorage, but
+// layering AsyncLocalStorage on top of Restate's replay loop blew up
+// Next.js's promise-tracking map (RangeError: Map maximum size exceeded).
+// Steps that call those helpers will throw a clear error from upstream:
+// "`getStepMetadata()` can only be called inside a step function".
+// Tracked as a known limitation in FEATURES.md.
+function createUseStep(
+  ctx: WorkflowOrchestratorContext,
+  _runId: string,
+  _meta: WorkflowMeta
+) {
   return function useStep<Args extends unknown[], Result>(stepName: string) {
+    const shortName = parseStepName(stepName)?.shortName ?? stepName;
+
     const stepFunction = (...args: Args): Promise<Result> => {
-      const stepFn = globalStepRegistry.get(stepName);
+      const stepFn = lookupStep(stepName);
       if (stepFn === undefined) {
         throw new Error(
-          `Can't find ${stepName} in the global registry. Available steps: ${[...globalStepRegistry.keys()].join(", ")}`
+          `Can't find ${stepName} in the global registry. Available steps: ${listAvailableSteps().join(", ")}`
         );
       }
 
-      return ctx.restateCtx.run(
-        parseStepName(stepName)?.shortName ?? stepName,
-        async () => {
+      return ctx.restateCtx
+        .run(shortName, async () => {
           try {
             const result = await (stepFn(...args) as Promise<Result>);
             // Native Response objects JSON-serialize to "{}" because their
             // properties are non-enumerable getters.  Convert to a plain
             // serializable form so Restate can journal it.
             if (result instanceof Response) {
-              return await serializeResponse(result) as unknown as Result;
+              return (await serializeResponse(result)) as unknown as Result;
             }
             return result;
           } catch (err) {
             rethrowFatalAsTerminal(err);
           }
-        }
-      ).then((result: Result) => {
-        // Reconstruct the Response on the way back into the VM.
-        if (isSerializedResponse(result)) {
-          return deserializeResponse(result) as unknown as Result;
-        }
-        return result;
-      });
+        })
+        .then((result: Result) => {
+          // Reconstruct the Response on the way back into the VM.
+          if (isSerializedResponse(result)) {
+            return deserializeResponse(result) as unknown as Result;
+          }
+          return result;
+        });
     };
 
     // Ensure the "name" property matches the original step function name
@@ -624,27 +770,80 @@ function deserializeRequest(data: SerializedRequest): Request {
   });
 }
 
+/**
+ * Reader side of an invocation-scoped signal stream.
+ *
+ * Reusing the same signal name acts as a FIFO queue: each `next()` consumes
+ * the next resolved value, in the order the writer appended them.
+ */
+class SignalStreamReader<T> implements AsyncIterableIterator<T> {
+  constructor(
+    private readonly ctx: internal.ContextInternal,
+    private readonly name: string
+  ) {}
+
+  next(): Promise<IteratorResult<T>> {
+    return this.ctx.signal<IteratorResult<T>>(this.name);
+  }
+
+  [Symbol.asyncIterator](): this {
+    return this;
+  }
+}
+
+/** Writer side: append/end via signals targeting another invocation. */
+class SignalStreamWriter<T> {
+  constructor(
+    private readonly target: internal.InvocationReference,
+    private readonly name: string
+  ) {}
+
+  append(value: T): void {
+    this.target
+      .signal<IteratorResult<T>>(this.name)
+      .resolve({ done: false, value });
+  }
+
+  end(): void {
+    this.target
+      .signal<IteratorResult<T>>(this.name)
+      .resolve({ done: true, value: undefined });
+  }
+}
+
 export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string) {
+  const ctxInternal = ctx.restateCtx as unknown as internal.ContextInternal;
   return function createHookImpl<T = unknown>(
     options: HookOptions = {}
   ): Hook<T> {
-    const { id, promise } = ctx.restateCtx.awakeable();
-    const token = options.token ?? id;
+    const signalName = `hook-${ctx.restateCtx.rand.uuidv4()}`;
+    const token = options.token ?? signalName;
     const isWebhook = options.isWebhook ?? false;
+    const workflowInvocationId = ctx.restateCtx.request().id.toString();
 
-    // Register hook
+    // Register hook with the workflow's invocation + signal name so
+    // hookObj.resolve can target the correct invocation/signal.
     ctx.restateCtx.objectSendClient(hookObj, token).create({
-      awakeableId: id,
       runId,
-      invocationId: ctx.restateCtx.request().id,
+      workflowInvocationId,
+      signalName,
       isWebhook,
       metadata: options.metadata,
     });
 
-    // For webhook hooks, reconstruct Request from serialized data
-    const resolvedPromise = isWebhook
-      ? promise.then((data) => deserializeRequest(data as SerializedRequest) as T)
-      : (promise as Promise<T>);
+    const reader = new SignalStreamReader<unknown>(ctxInternal, signalName);
+
+    function unwrap(value: unknown): T {
+      return isWebhook
+        ? (deserializeRequest(value as SerializedRequest) as T)
+        : (value as T);
+    }
+
+    async function nextValue(): Promise<IteratorResult<T>> {
+      const res = await reader.next();
+      if (res.done) return { done: true, value: undefined };
+      return { done: false, value: unwrap(res.value) };
+    }
 
     const hook: Hook<T> = {
       token,
@@ -656,7 +855,12 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
           | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
           | null
       ): Promise<TResult1 | TResult2> {
-        return resolvedPromise.then(onfulfilled, onrejected);
+        return nextValue().then((res) => {
+          if (res.done) {
+            throw new Error("Hook was disposed before a value arrived");
+          }
+          return res.value;
+        }, undefined).then(onfulfilled, onrejected);
       },
 
       dispose() {
@@ -667,11 +871,14 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
         this.dispose();
       },
 
-      // Support `for await (const payload of hook) { … }` syntax
-      async *[Symbol.asyncIterator]() {
-        while (true) {
-          yield await this;
-        }
+      // `for await (const payload of hook) { … }` — terminates on dispose.
+      [Symbol.asyncIterator](): AsyncIterableIterator<T> {
+        return {
+          next: nextValue,
+          [Symbol.asyncIterator]() {
+            return this;
+          },
+        };
       },
     };
 
@@ -742,15 +949,21 @@ export const sleepObj = object({
 
 // ---------------------------------------------------------------------------
 // workflowHooks — virtual object for hook lifecycle. Keyed by hook token.
+//
+// Uses Restate's signal API to support repeated resolution: each resolve
+// signals `{done: false, value}` to the workflow's invocation under the
+// hook's signal name; dispose signals `{done: true}`. The signal infra
+// queues per-name FIFO, so no buffer is needed in this object's state.
 // ---------------------------------------------------------------------------
 
 type HooksState = {
-  awakeableId: string;
+  workflowInvocationId: string;
+  signalName: string;
   runId: string;
   createdAt: number;
-  invocationId: string;
   isWebhook: boolean;
   metadata: unknown;
+  closed: boolean;
 };
 
 export const hookObj = object({
@@ -758,31 +971,46 @@ export const hookObj = object({
   handlers: {
     create: async (
       ctx: ObjectContext<HooksState>,
-      input: { awakeableId: string; runId: string; invocationId: string; isWebhook?: boolean; metadata?: unknown }
+      input: {
+        runId: string;
+        workflowInvocationId: string;
+        signalName: string;
+        isWebhook?: boolean;
+        metadata?: unknown;
+      }
     ) => {
       // Reject duplicate token while a previous hook is still active
-      if ((await ctx.get("awakeableId")) !== null) {
+      if ((await ctx.get("signalName")) !== null) {
         throw new TerminalError("Hook already exists", { errorCode: 409 });
       }
 
-      ctx.set("awakeableId", input.awakeableId);
+      ctx.set("workflowInvocationId", input.workflowInvocationId);
+      ctx.set("signalName", input.signalName);
       ctx.set("runId", input.runId);
-      ctx.set("invocationId", input.invocationId);
       ctx.set("createdAt", await ctx.date.now());
       ctx.set("isWebhook", input.isWebhook ?? false);
       ctx.set("metadata", input.metadata ?? null);
+      ctx.set("closed", false);
     },
     resolve: async (
       ctx: ObjectContext<HooksState>,
       input: unknown
     ): Promise<{ invocationId: string }> => {
-      const awakeableId = await ctx.get("awakeableId");
-      if (!awakeableId) {
-        throw new TerminalError("No awakeableId found");
+      const signalName = await ctx.get("signalName");
+      const workflowInvocationId = await ctx.get("workflowInvocationId");
+      if (!signalName || !workflowInvocationId) {
+        throw new TerminalError("Hook not found");
       }
-      ctx.resolveAwakeable(awakeableId, input);
-      ctx.clear("awakeableId");
-      return { invocationId: (await ctx.get("invocationId"))! };
+      if (await ctx.get("closed")) {
+        throw new TerminalError("Hook is disposed");
+      }
+      const ctxInternal = ctx as unknown as internal.ContextInternal;
+      const writer = new SignalStreamWriter<unknown>(
+        ctxInternal.invocation(InvocationIdParser.fromString(workflowInvocationId)),
+        signalName
+      );
+      writer.append(input);
+      return { invocationId: workflowInvocationId };
     },
     get: handlers.object.shared(
       async (ctx: ObjectSharedContext<HooksState>) => {
@@ -801,8 +1029,20 @@ export const hookObj = object({
         };
       }
     ),
-    // eslint-disable-next-line @typescript-eslint/require-await
-    dispose: async (ctx: ObjectContext) => {
+    dispose: async (ctx: ObjectContext<HooksState>) => {
+      const closed = (await ctx.get("closed")) ?? false;
+      const signalName = await ctx.get("signalName");
+      const workflowInvocationId = await ctx.get("workflowInvocationId");
+      if (!closed && signalName && workflowInvocationId) {
+        const ctxInternal = ctx as unknown as internal.ContextInternal;
+        const writer = new SignalStreamWriter<unknown>(
+          ctxInternal.invocation(
+            InvocationIdParser.fromString(workflowInvocationId)
+          ),
+          signalName
+        );
+        writer.end();
+      }
       ctx.clearAll();
     },
   },
@@ -818,6 +1058,12 @@ export const hookObj = object({
 
 import { createWorld as _createWorld } from "./world.js";
 import type { World } from "@workflow/world";
+
+export type {
+  HealthCheckEndpoint,
+  HealthCheckOptions,
+  HealthCheckResult,
+} from "@workflow/core/runtime";
 
 const WorldCache = Symbol.for("@workflow/world//cache");
 const globalSymbols = globalThis as unknown as Record<symbol, World | undefined>;

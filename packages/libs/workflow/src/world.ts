@@ -57,11 +57,20 @@ async function toWorkflowRun(data: WorkflowRunData): Promise<WorkflowRun> {
     overrides.error = { message: data.error };
   }
 
+  const rawArgs = JSON.parse(data.serializedInput) as unknown[];
+  const input = (await serialization.dehydrateWorkflowArguments(
+    rawArgs,
+    data.runId,
+    undefined,
+    [],
+    globalThis
+  )) as unknown[];
+
   return {
     runId: data.runId,
     deploymentId: "restate",
     workflowName: data.workflowName,
-    input: [],
+    input,
     createdAt: new Date(data.createdAt),
     updatedAt: new Date(),
     status: data.status,
@@ -75,6 +84,36 @@ async function toWorkflowRun(data: WorkflowRunData): Promise<WorkflowRun> {
 function notImplemented(name: string): (...args: unknown[]) => never {
   return () => {
     throw new Error(`[restate-world] ${name} is not implemented`);
+  };
+}
+
+// upstream's getHookByTokenWithKey runs hydrateStepArguments(hook.metadata)
+// on whatever we return, so the value must be in dehydrate's wire form.
+async function toHook(hookData: {
+  runId: string;
+  hookId: string;
+  token: string;
+  ownerId: string;
+  projectId: string;
+  environment: string;
+  createdAt: number;
+  isWebhook: boolean;
+  metadata: unknown;
+}) {
+  const metadata =
+    hookData.metadata === undefined || hookData.metadata === null
+      ? undefined
+      : await serialization.dehydrateStepArguments(
+          hookData.metadata,
+          hookData.runId,
+          undefined,
+          globalThis
+        );
+  return {
+    ...hookData,
+    createdAt: new Date(hookData.createdAt),
+    isWebhook: hookData.isWebhook ?? false,
+    metadata,
   };
 }
 
@@ -253,49 +292,20 @@ export function createWorld(): World {
 
     hooks: {
       async get(hookId: string) {
-        const hookData = await restate
-          .objectClient(hookObj, hookId)
-          .get();
+        const hookData = await restate.objectClient(hookObj, hookId).get();
         if (!hookData) {
           throw new Error(`Hook ${hookId} not found`);
         }
-        return {
-          ...hookData,
-          createdAt: new Date(hookData.createdAt),
-          isWebhook: hookData.isWebhook ?? false,
-          metadata: hookData.metadata ?? undefined,
-        };
+        return toHook(hookData);
       },
       async getByToken(token: string) {
-        const hookData = await restate
-          .objectClient(hookObj, token)
-          .get();
+        const hookData = await restate.objectClient(hookObj, token).get();
         if (!hookData) {
           throw new Error(`Hook with token ${token} not found`);
         }
-        return {
-          ...hookData,
-          createdAt: new Date(hookData.createdAt),
-          isWebhook: hookData.isWebhook ?? false,
-          metadata: hookData.metadata ?? undefined,
-        };
+        return toHook(hookData);
       },
       list: notImplemented("hooks.list"),
     } as unknown as World["hooks"],
-
-    // ------ Streamer (stub) ------
-
-    writeToStream: notImplemented(
-      "writeToStream"
-    ) as unknown as World["writeToStream"],
-    closeStream: notImplemented(
-      "closeStream"
-    ) as unknown as World["closeStream"],
-    readFromStream: notImplemented(
-      "readFromStream"
-    ) as unknown as World["readFromStream"],
-    listStreamsByRunId: notImplemented(
-      "listStreamsByRunId"
-    ) as unknown as World["listStreamsByRunId"],
-  };
+  } as unknown as World;
 }
