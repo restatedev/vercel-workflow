@@ -13,3 +13,4 @@ package/*
 .upstream
 .tarballs
 .workflow-data
+e2e-reports/*
