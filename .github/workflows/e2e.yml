@@ -142,7 +142,7 @@ jobs:
           docker run -d --name restate-e2e \
             --network host \
             -e RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS=pause \
-            docker.io/restatedev/restate:1.5.3
+            docker.io/restatedev/restate:1.6.2
           echo "Waiting for Restate to be ready..."
           for i in $(seq 1 30); do
             if curl -sf http://localhost:9070/health > /dev/null 2>&1; then
