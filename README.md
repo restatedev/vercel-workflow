@@ -25,6 +25,9 @@ This creates the `@restatedev/workflow` package that bridges Vercel Workflow to 
 ### 2. Navigate to the example and run it
 
 ```shell
+export WORKFLOW_TARGET_WORLD=@restatedev/workflow/world
+export RESTATE_INGRESS=http://localhost:8080
+export RESTATE_ADMIN_URL=http://localhost:9070
 cd packages/examples/workflow 
 pnpm run dev
 ```
@@ -60,3 +63,11 @@ You can supply to start():
 - Delayed execution
 - Idempotency 
 
+What doesnt work yet:
+- step.maxAttempts https://workflow-sdk.dev/docs/foundations/errors-and-retries#default-retrying
+- retryableError?
+- waiting on a hook leads to super many reinvocations? maybe restate is waking us up constantly? ask Francesco
+- I dont think we need a sleepObjects because wakeUp is only for tests... Ask Igal how to solve this
+- Implementing: `world.runs.list` / `world.events.list` / `world.steps.list` / `world.hooks.list`
+- Implementing streaming with pubsub
+- Cancelation of a step is implemented a bit hacky, with a sleep loop in case attach finishes before the workflow status is updated. It may be better to move back to having the workflow object actually wait for the completion. 
