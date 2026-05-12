@@ -109,6 +109,10 @@ type WorkflowRunState = {
 // Internal helper: dispatch the workflow service and store invocationId.
 // Caller must already hold the exclusive lock on this key (so it's safe
 // to read+write state synchronously). Returns the running state.
+//
+// The workflow service handler (restateHandler) reports its own terminal
+// state back via workflowRunObj.report() when it exits, so no separate
+// waitForCompletion reconciler is needed.
 async function dispatchWorkflow(
   ctx: ObjectContext<WorkflowRunState>,
   data: WorkflowRunData,
@@ -136,13 +140,13 @@ async function dispatchWorkflow(
   };
   ctx.set("data", runningData);
 
-  // Spawn waitForCompletion as a separate invocation on the same key. It will
-  // run after the current handler returns (Restate FIFOs invocations per key)
-  // and update status when the workflow finishes.
-  ctx.objectSendClient(workflowRunObj, ctx.key).waitForCompletion();
-
   return runningData;
 }
+
+type ReportInput =
+  | { status: "completed"; output: unknown }
+  | { status: "failed"; error: string }
+  | { status: "cancelled" };
 
 export const workflowRunObj = object({
   name: "workflowRun",
@@ -194,41 +198,27 @@ export const workflowRunObj = object({
       await dispatchWorkflow(ctx, data, input);
     },
 
-    waitForCompletion: async (
-      ctx: ObjectContext<WorkflowRunState>
+    // Called by the workflow service handler when it exits, and by cancel()
+    // after it has issued a cancel signal. Idempotent: if the run already
+    // reached a terminal state, subsequent reports are ignored, so reports
+    // racing with each other can't overwrite each other.
+    report: async (
+      ctx: ObjectContext<WorkflowRunState>,
+      input: ReportInput
     ): Promise<void> => {
       const data = await ctx.get("data");
-      if (!data?.invocationId) return;
+      if (!data) return;
       if (data.status !== "running") return;
 
-      const invocationId = InvocationIdParser.fromString(data.invocationId);
-      try {
-        const output = await ctx.attach(invocationId, serde.json);
-        ctx.set("data", {
-          ...data,
-          status: "completed" as const,
-          output,
-          completedAt: await ctx.date.now(),
-        });
-      } catch (err) {
-        const completedAt = await ctx.date.now();
-        if (err instanceof TerminalError && err.code === 409) {
-          ctx.set("data", {
-            ...data,
-            status: "cancelled" as const,
-            completedAt,
-          });
-        } else if (err instanceof TerminalError) {
-          ctx.set("data", {
-            ...data,
-            status: "failed" as const,
-            error: err.message,
-            completedAt,
-          });
-        } else {
-          throw err; // Non-terminal → let Restate retry
-        }
-      }
+      const completedAt = await ctx.date.now();
+      const next: WorkflowRunData = {
+        ...data,
+        status: input.status,
+        completedAt,
+        ...(input.status === "completed" ? { output: input.output } : {}),
+        ...(input.status === "failed" ? { error: input.error } : {}),
+      };
+      ctx.set("data", next);
     },
 
     get: handlers.object.shared(
@@ -425,11 +415,40 @@ async function restateHandler(
 
     const args: unknown[] = JSON.parse(payload) as unknown[];
 
-    return await workflowFn(...args);
+    const result = await workflowFn(...args);
+
+    // Self-report success. The send is journaled, so it's delivered even
+    // though we return immediately afterwards.
+    restateCtx
+      .objectSendClient(workflowRunObj, runId)
+      .report({ status: "completed", output: result });
+    return result;
   } catch (err) {
     // VM errors have a different Error prototype, so `instanceof Error` fails
-    // in the Restate SDK. Convert them to host Errors to preserve the message.
-    rethrowFatalAsTerminal(ensureHostError(err));
+    // in the Restate SDK. Convert them to host Errors first.
+    const hostErr = ensureHostError(err);
+
+    // FatalError → convert to TerminalError, report failed, throw terminal.
+    if (isFatalError(hostErr)) {
+      const message = (hostErr as Error).message;
+      restateCtx
+        .objectSendClient(workflowRunObj, runId)
+        .report({ status: "failed", error: message });
+      throw new TerminalError(message);
+    }
+
+    // TerminalError → distinguish cancellation (409) from failure, then re-throw.
+    if (hostErr instanceof TerminalError) {
+      const reportInput: ReportInput =
+        hostErr.code === 409
+          ? { status: "cancelled" }
+          : { status: "failed", error: hostErr.message };
+      restateCtx.objectSendClient(workflowRunObj, runId).report(reportInput);
+      throw hostErr;
+    }
+
+    // Non-terminal error → let Restate retry; do NOT report.
+    throw hostErr;
   }
 }
 
