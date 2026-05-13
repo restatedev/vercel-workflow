@@ -20,7 +20,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORLD="${1:-}"
 UPSTREAM_REF="${UPSTREAM_REF:-main}"
 WORKDIR="${WORKDIR:-$REPO_ROOT/.upstream}"
-APP_NAME="nextjs-turbopack"
+APP_NAME="${APP_NAME:-nextjs-turbopack}"
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -49,7 +49,7 @@ world_config() {
     mongodb/package)        echo "@workflow-worlds/mongodb" ;;
     redis/package)          echo "@workflow-worlds/redis" ;;
 
-    restate/docker_image)   echo "docker.io/restatedev/restate:1.5.3" ;;
+    restate/docker_image)   echo "docker.io/restatedev/restate:1.6.2" ;;
     mongodb/docker_image)   echo "mongo:7" ;;
     redis/docker_image)     echo "redis:7-alpine" ;;
 
@@ -82,6 +82,8 @@ DEV_PID=""
 cleanup() {
   log "Cleaning up..."
   [[ -n "$DEV_PID" ]] && kill "$DEV_PID" 2>/dev/null || true
+  # Capture container logs before removing — handy for debugging failed runs.
+  docker logs "$DOCKER_CONTAINER" > "$WORKDIR/docker-${WORLD}.log" 2>&1 || true
   docker rm -f "$DOCKER_CONTAINER" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -160,7 +162,11 @@ docker rm -f "$DOCKER_CONTAINER" 2>/dev/null || true
 
 DOCKER_ENV=""
 if [[ "$WORLD" == "restate" ]]; then
-  DOCKER_ENV="-e RESTATE_DEFAULT_RETRY_POLICY__MAX_ATTEMPTS=5 -e RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS=kill"
+  # MAX_ATTEMPTS=1 + kill = fail-fast: any non-terminal error in the workflow
+  # or in ctx.run kills the invocation immediately rather than burning minutes
+  # on retry storms while the test is just polling for status. Set MAX_ATTEMPTS
+  # higher (or unset) when you actually want to exercise retry behavior.
+  DOCKER_ENV="-e RESTATE_DEFAULT_RETRY_POLICY__MAX_ATTEMPTS=${RESTATE_MAX_ATTEMPTS:-1} -e RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS=kill -e RESTATE_DEFAULT_RETRY_POLICY__INITIAL_INTERVAL=100ms -e RESTATE_DEFAULT_RETRY_POLICY__MAX_INTERVAL=1s"
 fi
 
 # shellcheck disable=SC2086
@@ -194,6 +200,9 @@ case "$WORLD" in
   restate)
     export WORKFLOW_TARGET_WORLD="@restatedev/workflow/world"
     export RESTATE_INGRESS="http://localhost:8080"
+    # Needed by world.runs.list / world.hooks.list (admin SQL introspection)
+    # which is what the upstream e2e tests call to enumerate runs and hooks.
+    export RESTATE_ADMIN_URL="http://localhost:9070"
     ;;
   mongodb)
     export WORKFLOW_TARGET_WORLD="@workflow-worlds/mongodb"
@@ -276,10 +285,23 @@ fi
 # --- Step 11: Run e2e tests ---
 log "Running upstream e2e tests for ${WORLD}..."
 EXIT_CODE=0
-pnpm vitest run packages/core/e2e/e2e.test.ts \
-  --reporter=default --reporter=json \
-  --outputFile="e2e-${WORLD}.json" \
-  || EXIT_CODE=$?
+# Set TESTS_FILTER to a vitest -t pattern (regex) to narrow to specific tests.
+# Useful for iterating: TESTS_FILTER='(hookWorkflow|webhookWorkflow)' ./scripts/e2e-upstream.sh restate
+# Or auto-build from last run's failures:
+#   TESTS_FILTER=$(node scripts/e2e-failed-pattern.cjs) ./scripts/e2e-upstream.sh restate
+if [[ -n "${TESTS_FILTER:-}" ]]; then
+  log "Filtering tests: -t '${TESTS_FILTER}'"
+  pnpm vitest run packages/core/e2e/e2e.test.ts \
+    -t "${TESTS_FILTER}" \
+    --reporter=default --reporter=json \
+    --outputFile="e2e-${WORLD}.json" \
+    || EXIT_CODE=$?
+else
+  pnpm vitest run packages/core/e2e/e2e.test.ts \
+    --reporter=default --reporter=json \
+    --outputFile="e2e-${WORLD}.json" \
+    || EXIT_CODE=$?
+fi
 
 if [[ "$EXIT_CODE" -eq 0 ]]; then
   log_ok "All e2e tests passed!"
