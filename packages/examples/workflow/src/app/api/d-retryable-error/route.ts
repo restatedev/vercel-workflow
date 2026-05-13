@@ -5,7 +5,7 @@ import { NextResponse } from "next/server.js";
 
 
 export async function POST(_request: Request) {
-  const run = await start(callApiWorkflow, ["https://httpbin.io/status/404"]);
+  const run = await start(callApiWorkflow, ["https://httpbin.io/status/500"]);
   try {
     const result = await run.returnValue;
     return NextResponse.json({result})

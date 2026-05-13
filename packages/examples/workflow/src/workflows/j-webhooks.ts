@@ -1,13 +1,15 @@
 import { createWebhook } from "workflow";
+import { registerCallback } from "./_callback.js";
+
 export async function webhookWorkflow() {
   "use workflow";
   using webhook = createWebhook();
-  // The webhook is automatically available at this URL
-  console.log("Send HTTP requests to:", webhook.url);
-  // Example: https://your-app.com/.well-known/workflow/v1/webhook/lJHkuMdQ2FxSFTbUMU84k
-  // Workflow pauses until an HTTP request is received
+
+  // Hand our webhook URL to a (simulated) external service that will POST
+  // back. In a real workflow this is registering with Slack, Stripe, etc.
+  await registerCallback(webhook.url, { hello: "world" });
+
   const request = await webhook;
-  console.log("Received request:", request.method, request.url);
-  const data = await request.json();
-  console.log("Data:", data);
+  const data = (await request.json()) as Record<string, unknown>;
+  return { method: request.method, data };
 }

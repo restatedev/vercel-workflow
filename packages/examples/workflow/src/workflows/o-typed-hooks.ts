@@ -1,5 +1,6 @@
 import { defineHook } from "workflow";
 import { z } from "zod";
+import { triggerResume } from "./_callback.js";
 
 // Define the hook with a schema for type safety and runtime validation.
 // Exported so the API route can call `approvalHook.resume(...)`.
@@ -19,11 +20,16 @@ export async function documentApprovalWorkflow(documentId: string) {
     token: `approval:${documentId}`,
   });
 
+  // Simulate the approver service POSTing a typed approval to our resume route.
+  await triggerResume("o-resume", {
+    documentId,
+    requestId: "req-1",
+    approved: true,
+    approvedBy: "alice",
+    comment: "looks good",
+  });
+
   // Payload is type-safe and validated
   const approval = await hook;
-
-  console.log(
-    `Document ${approval.requestId} ${approval.approved ? "approved" : "rejected"}`,
-  );
-  console.log(`By: ${approval.approvedBy}, Comment: ${approval.comment}`);
+  return { documentId, approval };
 }

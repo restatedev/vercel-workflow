@@ -1,4 +1,5 @@
 import { createWebhook, type RequestWithResponse } from "workflow";
+import { registerCallback } from "./_callback.js";
 
 async function sendCustomResponse(request: RequestWithResponse, message: string) {
   "use step";
@@ -16,14 +17,14 @@ export async function webhookWithDynamicResponse() {
 
   // Set respondWith to "manual" to handle responses yourself
   using webhook = createWebhook({ respondWith: "manual" });
-  console.log("Send HTTP requests to:", webhook.url);
+
+  await registerCallback(webhook.url, { type: "urgent" });
 
   const request = await webhook;
   const data = (await request.json()) as { type?: string };
 
-  if (data.type === "urgent") {
-    await sendCustomResponse(request, "Processing urgently");
-  } else {
-    await sendCustomResponse(request, "Processing normally");
-  }
+  const responseMessage =
+    data.type === "urgent" ? "Processing urgently" : "Processing normally";
+  await sendCustomResponse(request, responseMessage);
+  return { data, responseMessage };
 }

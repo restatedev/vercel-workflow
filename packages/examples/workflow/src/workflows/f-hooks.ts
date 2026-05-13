@@ -1,15 +1,17 @@
 import { createHook } from "workflow";
+import { triggerResume } from "./_callback.js";
 
 export async function approvalWorkflow() {
   "use workflow";
   using hook = createHook<{ approved: boolean; comment: string }>();
-  console.log("Waiting for approval...");
-  console.log("Send approval to token:", hook.token);
-  // Workflow pauses here until data is sent
+
+  // Simulate an external approver POSTing the verdict to our resume route.
+  await triggerResume("f-resume", {
+    token: hook.token,
+    approved: true,
+    comment: "lgtm",
+  });
+
   const result = await hook;
-  if (result.approved) {
-    console.log("Approved with comment:", result.comment);
-  } else {
-    console.log("Rejected:", result.comment);
-  }
+  return result;
 }

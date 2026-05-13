@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/require-await */
 import { createHook } from "workflow";
+import { triggerResume } from "./_callback.js";
 
 interface SlackMessage {
   user: string;
@@ -12,13 +13,20 @@ export async function slackChannelBot(channelId: string) {
   using hook = createHook<SlackMessage>({
     token: `slack_messages:${channelId}`,
   });
+
+  // Simulate an external chat platform calling our resume endpoint, which
+  // delivers a fixed sequence of messages (including "/stop").
+  await triggerResume("g-resume", {});
+
+  const messages: SlackMessage[] = [];
   for await (const message of hook) {
-    console.log(`${message.user}: ${message.text}`);
+    messages.push(message);
     if (message.text === "/stop") {
       break;
     }
     await processMessage(message);
   }
+  return { channelId, messages };
 }
 async function processMessage(message: SlackMessage) {
   "use step";

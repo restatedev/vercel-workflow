@@ -4,10 +4,6 @@ import { NextResponse } from "next/server.js";
 
 export async function POST(_request: Request) {
   const run = await start(webhookWorkflow);
-
-  return NextResponse.json({
-    message:
-      "Workflow started. The webhook URL is printed in the dev-server logs — POST any JSON to it to resume the workflow.",
-    runId: run.runId,
-  });
+  const result = await run.returnValue;
+  return NextResponse.json({ runId: run.runId, result });
 }

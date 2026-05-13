@@ -8,10 +8,6 @@ export async function POST(request: Request) {
   };
   const id = documentId ?? "doc-123";
   const run = await start(documentApprovalWorkflow, [id]);
-
-  return NextResponse.json({
-    message: "Workflow started. POST approval payload to /api/o-resume.",
-    runId: run.runId,
-    documentId: id,
-  });
+  const result = await run.returnValue;
+  return NextResponse.json({ runId: run.runId, result });
 }

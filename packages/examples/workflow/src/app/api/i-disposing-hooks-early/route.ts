@@ -9,11 +9,6 @@ export async function POST(request: Request) {
   const id = channelId ?? "channel123";
 
   const run = await start(handoffWorkflow, [id]);
-
-  return NextResponse.json({
-    message:
-      "Workflow started. POST {channelId?, message, handoff?} to /api/i-resume — send {handoff: true} to release the token.",
-    runId: run.runId,
-    token: `channel:${id}`,
-  });
+  const result = await run.returnValue;
+  return NextResponse.json({ runId: run.runId, result });
 }
