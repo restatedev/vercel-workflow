@@ -7,6 +7,7 @@ import {
   ObjectContext,
   ObjectSharedContext,
   RestatePromise,
+  RetryableError as RestateRetryableError,
   service,
   TerminalError,
   serde,
@@ -40,6 +41,24 @@ function isFatalError(err: unknown): err is Error & { fatal: true } {
 }
 
 /**
+ * Duck-type check for Vercel Workflow's RetryableError. Same VM-prototype
+ * caveat as isFatalError. Vercel exposes `retryAfter: Date` (absolute time);
+ * the caller maps that to Restate's `delay` (duration from now).
+ */
+function isVercelRetryableError(
+  err: unknown
+): err is Error & { retryAfter: Date } {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "name" in err &&
+    (err as Record<string, unknown>).name === "RetryableError" &&
+    "retryAfter" in err &&
+    (err as { retryAfter: unknown }).retryAfter instanceof Date
+  );
+}
+
+/**
  * Errors thrown inside a VM context have a different prototype chain.
  * `instanceof Error` will fail in the host, and `JSON.stringify` returns "{}"
  * because Error properties are non-enumerable.  Convert them to host Errors.
@@ -61,6 +80,23 @@ function ensureHostError(err: unknown): unknown {
 }
 
 /**
+ * A TerminalError subclass that also identifies itself as Vercel's FatalError.
+ *
+ * - Extends TerminalError so Restate stops retrying the invocation.
+ * - Sets `name = "FatalError"` and `fatal = true` so workflow code that does
+ *   `FatalError.is(e)` (which checks `e.name === "FatalError"`) sees a match.
+ *   The name property survives the host→VM error crossing (the prototype
+ *   chain doesn't, but `instanceof` isn't what FatalError.is uses).
+ */
+export class FatalTerminalError extends TerminalError {
+  fatal = true;
+  constructor(message: string) {
+    super(message);
+    this.name = "FatalError";
+  }
+}
+
+/**
  * If the error is a Vercel Workflow FatalError, re-throw as a Restate
  * TerminalError so that Restate stops retrying.
  */
@@ -69,6 +105,14 @@ function rethrowFatalAsTerminal(err: unknown): never {
     throw new TerminalError(err.message);
   }
   throw err;
+}
+
+function getIngressUrl(): string {
+  const ingress = process.env["RESTATE_INGRESS"];
+  if (!ingress) {
+    throw new TerminalError("Please set the RESTATE_INGRESS env var.");
+  }
+  return ingress.replace(/\/+$/, "");
 }
 
 export function workflowEntrypoint(workflowCode: string) {
@@ -382,13 +426,14 @@ async function restateHandler(
         return new Date(startTimeMs);
       },
       get url(): string {
-        const ingress = process.env["RESTATE_INGRESS"];
-        if (!ingress) {
-          throw new TerminalError(
-            "Cannot retrieve workflow submission url. Please set RESTATE_INGRESS env var."
-          );
-        }
-        return `${ingress.replace(/\/+$/, "")}/${serviceName}/run`;
+        // Upstream's `WorkflowMetadata.url` semantically means "the URL where
+        // the workflow can be triggered." Vercel's bundled `createWebhook`
+        // appends `/.well-known/workflow/v1/webhook/<token>` to this — but we
+        // intercept `hook.url` for webhooks via Object.defineProperty (see
+        // createCreateHook below) so the appended path is silently ignored.
+        // For any user code that reads `getWorkflowMetadata().url` directly,
+        // returning the Restate ingress URL is the most useful default.
+        return getIngressUrl();
       },
       // Required by upstream's WorkflowMetadata shape. We don't implement
       // World.getEncryptionKeyForRun, so encryption is never on.
@@ -485,6 +530,8 @@ function createContext(restateCtx: Context) {
   g.WritableStream = globalThis.WritableStream;
   g.TextDecoderStream = globalThis.TextDecoderStream;
   g.Headers = globalThis.Headers;
+  g.Request = globalThis.Request;
+  g.Response = globalThis.Response;
   g.TextEncoder = globalThis.TextEncoder;
   g.TextDecoder = globalThis.TextDecoder;
   g.URL = globalThis.URL;
@@ -700,13 +747,16 @@ interface WorkflowMeta {
   workflowStartedAt: number;
 }
 
-// step-side `getStepMetadata` / `getWorkflowMetadata` accessors are not
-// wired up. Upstream implements them via Node's AsyncLocalStorage, but
-// layering AsyncLocalStorage on top of Restate's replay loop blew up
-// Next.js's promise-tracking map (RangeError: Map maximum size exceeded).
-// Steps that call those helpers will throw a clear error from upstream:
-// "`getStepMetadata()` can only be called inside a step function".
-// Tracked as a known limitation in FEATURES.md.
+// `getStepMetadata()` / `getWorkflowMetadata()` from inside step bodies are
+// NOT supported in this World. Upstream wires them via Node AsyncLocalStorage,
+// which requires us to manage our own retry loop so we can populate `attempt`
+// on every retry — Restate's `ctx.run` does its own internal retry and doesn't
+// expose the attempt counter to the closure. Maintaining the parallel retry
+// machinery was a meaningful complexity tax for one helper, so v1 doesn't
+// expose stepMetadata. Users who need per-step metadata should derive it
+// explicitly from step arguments. See README "Known limitations."
+//
+// The wrapper below relies on Restate's built-in retry policy + delay handling.
 function createUseStep(
   ctx: WorkflowOrchestratorContext,
   _runId: string,
@@ -723,28 +773,53 @@ function createUseStep(
         );
       }
 
-      return ctx.restateCtx
-        .run(shortName, async () => {
-          try {
-            const result = await (stepFn(...args) as Promise<Result>);
-            // Native Response objects JSON-serialize to "{}" because their
-            // properties are non-enumerable getters.  Convert to a plain
-            // serializable form so Restate can journal it.
-            if (result instanceof Response) {
-              return (await serializeResponse(result)) as unknown as Result;
-            }
-            return result;
-          } catch (err) {
-            rethrowFatalAsTerminal(err);
-          }
-        })
-        .then((result: Result) => {
-          // Reconstruct the Response on the way back into the VM.
-          if (isSerializedResponse(result)) {
-            return deserializeResponse(result) as unknown as Result;
+      // Vercel's stepFn.maxRetries counts retries-after-first-attempt.
+      // Restate's maxRetryAttempts counts total attempts (including the first).
+      // Translate: total = maxRetries + 1. Omit when unset so Restate uses its
+      // service-default policy.
+      const stepMaxRetries = (stepFn as { maxRetries?: number }).maxRetries;
+
+      const runAction = async () => {
+        try {
+          const result = await (stepFn(...args) as Promise<Result>);
+          // Native Response objects JSON-serialize to "{}" because their
+          // properties are non-enumerable getters.  Convert to a plain
+          // serializable form so Restate can journal it.
+          if (result instanceof Response) {
+            return (await serializeResponse(result)) as unknown as Result;
           }
           return result;
-        });
+        } catch (err) {
+          // FatalError → throw a TerminalError that also passes Vercel's
+          // FatalError.is() identity check (`name === "FatalError"`).
+          // Restate sees TerminalError and stops retrying.
+          if (isFatalError(err)) {
+            throw new FatalTerminalError(err.message);
+          }
+          // Vercel's RetryableError → Restate's RetryableError with the
+          // user-requested delay (translated from absolute Date to duration).
+          if (isVercelRetryableError(err)) {
+            const ms = Math.max(0, err.retryAfter.getTime() - Date.now());
+            throw new RestateRetryableError(err.message, { retryAfter: ms });
+          }
+          throw err;
+        }
+      };
+
+      const runPromise =
+        typeof stepMaxRetries === "number"
+          ? ctx.restateCtx.run(shortName, runAction, {
+              maxRetryAttempts: stepMaxRetries + 1,
+            })
+          : ctx.restateCtx.run(shortName, runAction);
+
+      return runPromise.then((result: Result) => {
+        // Reconstruct the Response on the way back into the VM.
+        if (isSerializedResponse(result)) {
+          return deserializeResponse(result) as unknown as Result;
+        }
+        return result;
+      });
     };
 
     // Ensure the "name" property matches the original step function name
@@ -853,9 +928,35 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
     const reader = new SignalStreamReader<unknown>(ctxInternal, signalName);
 
     function unwrap(value: unknown): T {
-      return isWebhook
-        ? (deserializeRequest(value as SerializedRequest) as T)
-        : (value as T);
+      if (!isWebhook) return value as T;
+
+      // Two possible shapes for a webhook value:
+      //   1. Full `SerializedRequest` ({ method, url, headers, body }) —
+      //      sent by `resumeWebhook` when the legacy Next.js webhook route
+      //      receives the request and forwards it.
+      //   2. Raw JSON body — when an external caller POSTs the body directly
+      //      to Restate's ingress at `${RESTATE_INGRESS}/workflowHooks/<token>/resolve`.
+      //      Restate doesn't preserve method/headers/URL of the caller's
+      //      request; only the JSON body becomes the resolve input.
+      //
+      // Detect by shape. For case 2 we synthesize a Request so workflow code
+      // doing `await webhook.json()` / `request.method` keeps working
+      // (method defaults to POST, body is the JSON value).
+      if (
+        typeof value === "object" &&
+        value !== null &&
+        "method" in value &&
+        "url" in value &&
+        "headers" in value &&
+        "body" in value
+      ) {
+        return deserializeRequest(value as SerializedRequest) as T;
+      }
+      return new Request("http://localhost/", {
+        method: "POST",
+        headers: new Headers({ "content-type": "application/json" }),
+        body: JSON.stringify(value ?? null),
+      }) as T;
     }
 
     async function nextValue(): Promise<IteratorResult<T>> {
@@ -907,6 +1008,30 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
     const vmDispose = (ctx.globalThis.Symbol as Record<string, unknown>)?.dispose as symbol | undefined;
     if (vmDispose && vmDispose !== Symbol.dispose) {
       (hook as unknown as Record<symbol, unknown>)[vmDispose] = () => hook.dispose();
+    }
+
+    // Webhook URL — for webhook hooks, point directly at Restate's ingress so
+    // external callers POST straight to `workflowHooks/<token>/resolve` without
+    // an intermediary Next.js route.
+    //
+    // Vercel's bundled createWebhook does `hook.url = ${metadata.url}/.well-known/workflow/v1/webhook/<token>`
+    // unconditionally after our createHookImpl returns. We define `url` as a
+    // getter/no-op-setter pair so Vercel's assignment is silently absorbed and
+    // the getter always returns our Restate-ingress URL.
+    if (isWebhook) {
+      const ingress = getIngressUrl();
+      const restateWebhookUrl = `${ingress}/workflowHooks/${encodeURIComponent(token)}/resolve`;
+      Object.defineProperty(hook, "url", {
+        get() {
+          return restateWebhookUrl;
+        },
+        set() {
+          // Swallow Vercel's `hook.url = ...` assignment from the bundled
+          // createWebhook wrapper. We control the URL.
+        },
+        enumerable: true,
+        configurable: false,
+      });
     }
 
     return hook;

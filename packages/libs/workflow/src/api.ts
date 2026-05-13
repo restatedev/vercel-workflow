@@ -112,8 +112,13 @@ export class Run<TResult> extends CoreRun<TResult> {
         throw new WorkflowRunCancelledError(this.runId);
       }
      if (err instanceof TerminalError) {
+        // Errors thrown from a workflow handler are user-code errors by
+        // default ("Error thrown in user workflow or step code" per
+        // upstream's RUN_ERROR_CODES). Set USER_ERROR so consumers checking
+        // `error.cause.code` match upstream behavior.
         throw new WorkflowRunFailedError(this.runId, {
           message: err.message ?? "Unknown error",
+          code: "USER_ERROR",
         });
       }
       throw err;
@@ -162,6 +167,7 @@ export async function start(
         workflow,
         argsOrOptions as StartOptionsWithoutDeploymentId | undefined,
       );
+  Object.setPrototypeOf(coreRun, Run.prototype);
   return coreRun as Run<unknown>;
 }
 
