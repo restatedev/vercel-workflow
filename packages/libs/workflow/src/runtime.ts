@@ -306,7 +306,7 @@ export const workflowRunObj = object({
         }
 
         const invocationId = InvocationIdParser.fromString(data.invocationId);
-        return await ctx.attach(invocationId, serde.json);
+        return (await ctx.attach(invocationId, serde.json)) as unknown;
       }
     ),
 
@@ -540,7 +540,7 @@ function createContext(restateCtx: Context) {
 
   // Polyfill Symbol.dispose / Symbol.asyncDispose inside the VM so the
   // compiled `using` keyword works (Node < 20.4 lacks these).
-  const vmSymbol = g.Symbol as unknown as Record<string, unknown>;
+  const vmSymbol = g.Symbol as Record<string, unknown>;
   if (!vmSymbol["dispose"]) {
     vmSymbol["dispose"] = Symbol.for("Symbol.dispose");
   }
@@ -565,7 +565,7 @@ function createContext(restateCtx: Context) {
   g.structuredClone = globalThis.structuredClone;
 
   // Propagate environment variables
-  (g as Record<string, unknown>).process = {
+  g.process = {
     env: Object.freeze({ ...process.env }),
   };
 
@@ -615,7 +615,7 @@ function isSerializedResponse(v: unknown): v is SerializedResponse {
  */
 function deserializeResponse(serialized: SerializedResponse): Response {
   const bodyText = serialized.body;
-  const resp: any = {
+  const resp: Record<string, unknown> = {
     status: serialized.status,
     statusText: serialized.statusText,
     headers: new Headers(serialized.headers),
@@ -625,14 +625,15 @@ function deserializeResponse(serialized: SerializedResponse): Response {
     bodyUsed: false,
     redirected: false,
     type: "basic",
-    text: async () => bodyText,
-    json: async () => JSON.parse(bodyText),
-    arrayBuffer: async () => new TextEncoder().encode(bodyText).buffer,
-    blob: async () => new Blob([bodyText]),
+    text: () => Promise.resolve(bodyText),
+    json: () => Promise.resolve(JSON.parse(bodyText) as unknown),
+    arrayBuffer: () =>
+      Promise.resolve(new TextEncoder().encode(bodyText).buffer),
+    blob: () => Promise.resolve(new Blob([bodyText])),
     clone: () => deserializeResponse(serialized),
   };
   Object.setPrototypeOf(resp, Response.prototype);
-  return resp as Response;
+  return resp as unknown as Response;
 }
 
 function createDurableFetch(ctx: WorkflowOrchestratorContext) {
@@ -1259,9 +1260,9 @@ const globalSymbols = globalThis as unknown as Record<
 export { _createWorld as createWorld };
 
 export function getWorld(): World {
-  if (globalSymbols[WorldCache]) return globalSymbols[WorldCache]!;
+  if (globalSymbols[WorldCache]) return globalSymbols[WorldCache];
   globalSymbols[WorldCache] = _createWorld();
-  return globalSymbols[WorldCache]!;
+  return globalSymbols[WorldCache];
 }
 
 export function setWorld(world: World | undefined): void {
@@ -1270,7 +1271,7 @@ export function setWorld(world: World | undefined): void {
 
 export function getWorldHandlers(): Pick<World, "createQueueHandler"> {
   const w = getWorld();
-  return { createQueueHandler: w.createQueueHandler };
+  return { createQueueHandler: w.createQueueHandler.bind(w) };
 }
 
 export function healthCheck(): Promise<{ ok: boolean }> {

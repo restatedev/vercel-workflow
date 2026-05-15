@@ -13,6 +13,7 @@ export default [
       "**/.well-known/**",
       "**/.swc/**",
       "**/vendored/**",
+      "packages/libs/workflow/e2e/**",
     ],
   },
 
