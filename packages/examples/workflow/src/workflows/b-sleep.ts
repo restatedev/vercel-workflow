@@ -1,4 +1,3 @@
- 
 import { sleep } from "workflow";
 
 async function prepareData(input: string) {

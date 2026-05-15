@@ -1,4 +1,3 @@
- 
 import { FatalError } from "workflow";
 
 /**

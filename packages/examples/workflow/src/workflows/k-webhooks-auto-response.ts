@@ -1,4 +1,3 @@
- 
 import { createWebhook } from "workflow";
 import { registerCallback } from "./_callback.js";
 

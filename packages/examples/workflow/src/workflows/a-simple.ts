@@ -1,4 +1,3 @@
- 
 /**
  * Simplest example of a workflow with multiple steps
  */
