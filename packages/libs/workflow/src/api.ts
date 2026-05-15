@@ -1,9 +1,16 @@
 import {
   Run as CoreRun,
   start as coreStart,
+  type StartOptions,
+  type StartOptionsWithDeploymentId,
+  type StartOptionsWithoutDeploymentId,
   type StopSleepOptions,
   type StopSleepResult,
 } from "@workflow/core/runtime";
+import type {
+  WorkflowFunction,
+  WorkflowMetadata,
+} from "@workflow/core/runtime/start";
 import type { WorkflowRunStatus } from "@workflow/world";
 import * as clients from "@restatedev/restate-sdk-clients";
 import {
@@ -16,6 +23,7 @@ import type { HookMetadata } from "./index.js";
 
 // Re-export everything from workflow/api that we don't override
 export {
+  getHookByToken,
   runStep,
   type Event,
   type StartOptions,
@@ -101,8 +109,13 @@ export class Run<TResult> extends CoreRun<TResult> {
         throw new WorkflowRunCancelledError(this.runId);
       }
       if (err instanceof TerminalError) {
+        // Errors thrown from a workflow handler are user-code errors by
+        // default ("Error thrown in user workflow or step code" per
+        // upstream's RUN_ERROR_CODES). Set USER_ERROR so consumers checking
+        // `error.cause.code` match upstream behavior.
         throw new WorkflowRunFailedError(this.runId, {
           message: err.message ?? "Unknown error",
+          code: "USER_ERROR",
         });
       }
       throw err;
@@ -114,12 +127,46 @@ export function getRun<TResult>(runId: string): Run<TResult> {
   return new Run<TResult>(runId);
 }
 
-// Wrap coreStart to return our Run subclass
-type CoreStart = typeof coreStart;
-export const start = (async (...args: Parameters<CoreStart>) => {
-  const coreRun = await coreStart(...args);
-  return new Run(coreRun.runId);
-}) as CoreStart;
+// Wrap coreStart to return our Run subclass while preserving its overloads.
+// Upgrading via setPrototypeOf (instead of `new Run(...)`) preserves private
+// state that coreStart may have set on the instance — notably `resilientStart`,
+// which controls 404-retry behavior in pollReturnValue when run_created failed.
+export function start<TArgs extends unknown[], TResult>(
+  workflow: WorkflowFunction<TArgs, TResult> | WorkflowMetadata,
+  args: unknown[],
+  options: StartOptionsWithDeploymentId
+): Promise<Run<unknown>>;
+export function start<TResult>(
+  workflow: WorkflowFunction<[], TResult> | WorkflowMetadata,
+  options: StartOptionsWithDeploymentId
+): Promise<Run<unknown>>;
+export function start<TArgs extends unknown[], TResult>(
+  workflow: WorkflowFunction<TArgs, TResult> | WorkflowMetadata,
+  args: TArgs,
+  options?: StartOptionsWithoutDeploymentId
+): Promise<Run<TResult>>;
+export function start<TResult>(
+  workflow: WorkflowFunction<[], TResult> | WorkflowMetadata,
+  options?: StartOptionsWithoutDeploymentId
+): Promise<Run<TResult>>;
+export async function start(
+  workflow: WorkflowFunction<unknown[], unknown> | WorkflowMetadata,
+  argsOrOptions?: unknown[] | StartOptions,
+  maybeOptions?: StartOptions
+): Promise<Run<unknown>> {
+  const coreRun = Array.isArray(argsOrOptions)
+    ? await coreStart(
+        workflow,
+        argsOrOptions,
+        maybeOptions as StartOptionsWithoutDeploymentId | undefined
+      )
+    : await coreStart(
+        workflow,
+        argsOrOptions as StartOptionsWithoutDeploymentId | undefined
+      );
+  Object.setPrototypeOf(coreRun, Run.prototype);
+  return coreRun as Run<unknown>;
+}
 
 /**
  * Resumes a webhook hook by serializing the incoming HTTP Request and

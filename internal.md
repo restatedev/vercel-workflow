@@ -106,13 +106,13 @@ Manages the lifecycle of a single workflow run.
 
 Tracks pending sleeps for a workflow run so `wakeUp()` can find and resolve them.
 
-**State**: `{ pending: SleepEntry[] }` where `SleepEntry = { correlationId, awakeableId }`.
+**State**: `{ pending: SleepEntry[] }` where `SleepEntry = { awakeableId }`.
 
 | Handler | Type | Purpose |
 |---------|------|---------|
 | `register` | exclusive | Adds a sleep entry to the pending list |
 | `complete` | exclusive | Removes a sleep entry (called after the race resolves) |
-| `wakeUp` | exclusive | Resolves the awakeable for a given correlationId, removes entry |
+| `wakeUp` | exclusive | Resolves the awakeable for a given awakeableId, removes entry |
 | `getPending` | shared | Returns the pending list (used by `Run.wakeUp()` to discover sleeps) |
 
 ### `workflowHooks` (keyed by hook token)
@@ -242,8 +242,8 @@ The World is the bridge between the Vercel SDK's lifecycle events and Restate's 
 
 1. User calls `run.wakeUp(options?)` (our override)
 2. Calls `workflowSleep/{runId}/getPending` to discover registered sleeps
-3. Optionally filters by `correlationIds`
-4. For each target: calls `workflowSleep/{runId}/wakeUp({ correlationId })`
+3. Optionally filters by `awakeableIds`
+4. For each target: calls `workflowSleep/{runId}/wakeUp({ awakeableId })`
 5. The handler resolves the awakeable, which wins the `RestatePromise.race` in the sleeping workflow
 6. The workflow continues past the `sleep()` call
 

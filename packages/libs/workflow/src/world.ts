@@ -37,6 +37,32 @@ function getIngressUrl(): string {
   return ingress.replace(/\/+$/, "");
 }
 
+function getAdminUrl(): string {
+  const admin = process.env["RESTATE_ADMIN_URL"];
+  if (!admin) {
+    throw new Error("Please set the RESTATE_ADMIN_URL env var.");
+  }
+  return admin.replace(/\/+$/, "");
+}
+
+async function restateQuery<T>(sql: string): Promise<T[]> {
+  const res = await fetch(`${getAdminUrl()}/query`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ query: sql }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Restate admin query failed (${res.status}): ${await res.text()}`
+    );
+  }
+  const body = (await res.json()) as { rows?: T[] };
+  return body.rows ?? [];
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -54,14 +80,32 @@ async function toWorkflowRun(data: WorkflowRunData): Promise<WorkflowRun> {
   }
 
   if (data.error) {
-    overrides.error = { message: data.error };
+    // Errors thrown from a workflow handler are user-code errors by
+    // definition (per upstream's `RUN_ERROR_CODES.USER_ERROR`: "Error
+    // thrown in user workflow or step code"). Set USER_ERROR so consumers
+    // checking `error.cause.code` after `run.returnValue.catch(...)` get
+    // the expected code via both code paths:
+    //   1. our overridden `attachReturnValue` (when start() comes from
+    //      `workflow/api`, which sets prototype via setPrototypeOf), and
+    //   2. upstream's `#pollReturnValue` (when start() comes directly from
+    //      `@workflow/core/runtime`, e.g. in the e2e suite).
+    overrides.error = { message: data.error, code: "USER_ERROR" };
   }
+
+  const rawArgs = JSON.parse(data.serializedInput) as unknown[];
+  const input = (await serialization.dehydrateWorkflowArguments(
+    rawArgs,
+    data.runId,
+    undefined,
+    [],
+    globalThis
+  )) as unknown[];
 
   return {
     runId: data.runId,
     deploymentId: "restate",
     workflowName: data.workflowName,
-    input: [],
+    input,
     createdAt: new Date(data.createdAt),
     updatedAt: new Date(),
     status: data.status,
@@ -75,6 +119,36 @@ async function toWorkflowRun(data: WorkflowRunData): Promise<WorkflowRun> {
 function notImplemented(name: string): (...args: unknown[]) => never {
   return () => {
     throw new Error(`[restate-world] ${name} is not implemented`);
+  };
+}
+
+// upstream's getHookByTokenWithKey runs hydrateStepArguments(hook.metadata)
+// on whatever we return, so the value must be in dehydrate's wire form.
+async function toHook(hookData: {
+  runId: string;
+  hookId: string;
+  token: string;
+  ownerId: string;
+  projectId: string;
+  environment: string;
+  createdAt: number;
+  isWebhook: boolean;
+  metadata: unknown;
+}) {
+  const metadata =
+    hookData.metadata === undefined || hookData.metadata === null
+      ? undefined
+      : await serialization.dehydrateStepArguments(
+          hookData.metadata,
+          hookData.runId,
+          undefined,
+          globalThis
+        );
+  return {
+    ...hookData,
+    createdAt: new Date(hookData.createdAt),
+    isWebhook: hookData.isWebhook ?? false,
+    metadata,
   };
 }
 
@@ -130,7 +204,61 @@ export function createWorld(): World {
         return toWorkflowRun(data);
       },
 
-      list: notImplemented("runs.list") as unknown as World["runs"]["list"],
+      async list(
+        params: {
+          workflowName?: string;
+          status?: WorkflowRunData["status"];
+          pagination?: {
+            limit?: number;
+            cursor?: string;
+            sortOrder?: "asc" | "desc";
+          };
+        } = {}
+      ) {
+        const rows = await restateQuery<{
+          service_key: string;
+          value_utf8: string;
+        }>(
+          `SELECT service_key, value_utf8 FROM state
+             WHERE service_name = 'workflowRun' AND key = 'data'`
+        );
+
+        let runs: WorkflowRunData[] = [];
+        for (const row of rows) {
+          try {
+            runs.push(JSON.parse(row.value_utf8) as WorkflowRunData);
+          } catch {
+            /* skip malformed rows */
+          }
+        }
+        if (params.workflowName) {
+          runs = runs.filter((r) => r.workflowName === params.workflowName);
+        }
+        if (params.status) {
+          runs = runs.filter((r) => r.status === params.status);
+        }
+
+        const sortOrder = params.pagination?.sortOrder ?? "desc";
+        runs.sort((a, b) =>
+          sortOrder === "asc"
+            ? a.createdAt - b.createdAt
+            : b.createdAt - a.createdAt
+        );
+
+        const limit = params.pagination?.limit ?? 100;
+        const offset = params.pagination?.cursor
+          ? parseInt(params.pagination.cursor, 10)
+          : 0;
+        const page = runs.slice(offset, offset + limit);
+        const data = await Promise.all(page.map(toWorkflowRun));
+        const hasMore = offset + limit < runs.length;
+
+        return {
+          data,
+          cursor: hasMore ? String(offset + limit) : null,
+          hasMore,
+        };
+      },
     } as World["runs"],
 
     // ------ Storage: events ------
@@ -251,41 +379,95 @@ export function createWorld(): World {
         if (!hookData) {
           throw new Error(`Hook ${hookId} not found`);
         }
-        return {
-          ...hookData,
-          createdAt: new Date(hookData.createdAt),
-          isWebhook: hookData.isWebhook ?? false,
-          metadata: hookData.metadata ?? undefined,
-        };
+        return toHook(hookData);
       },
       async getByToken(token: string) {
         const hookData = await restate.objectClient(hookObj, token).get();
         if (!hookData) {
           throw new Error(`Hook with token ${token} not found`);
         }
+        return toHook(hookData);
+      },
+      async list(
+        params: {
+          runId?: string;
+          pagination?: {
+            limit?: number;
+            cursor?: string;
+            sortOrder?: "asc" | "desc";
+          };
+        } = {}
+      ) {
+        const rows = await restateQuery<{
+          service_key: string;
+          key: string;
+          value_utf8: string;
+        }>(
+          "SELECT service_key, key, value_utf8 FROM state WHERE service_name = 'workflowHooks'"
+        );
+
+        // Group state rows back into one record per token.
+        const byToken = new Map<string, Record<string, unknown>>();
+        for (const row of rows) {
+          let value: unknown;
+          try {
+            value = JSON.parse(row.value_utf8);
+          } catch {
+            continue;
+          }
+          const entry = byToken.get(row.service_key) ?? {};
+          entry[row.key] = value;
+          byToken.set(row.service_key, entry);
+        }
+
+        const hooks: {
+          runId: string;
+          hookId: string;
+          token: string;
+          ownerId: string;
+          projectId: string;
+          environment: string;
+          createdAt: number;
+          isWebhook: boolean;
+          metadata: unknown;
+        }[] = [];
+        for (const [token, state] of byToken) {
+          if (typeof state.runId !== "string") continue;
+          if (params.runId && state.runId !== params.runId) continue;
+          hooks.push({
+            runId: state.runId,
+            hookId: token,
+            token,
+            ownerId: "restate",
+            projectId: "restate",
+            environment: "development",
+            createdAt: (state.createdAt as number) ?? 0,
+            isWebhook: (state.isWebhook as boolean) ?? false,
+            metadata: state.metadata,
+          });
+        }
+
+        const sortOrder = params.pagination?.sortOrder ?? "desc";
+        hooks.sort((a, b) =>
+          sortOrder === "asc"
+            ? a.createdAt - b.createdAt
+            : b.createdAt - a.createdAt
+        );
+
+        const limit = params.pagination?.limit ?? 100;
+        const offset = params.pagination?.cursor
+          ? parseInt(params.pagination.cursor, 10)
+          : 0;
+        const page = hooks.slice(offset, offset + limit);
+        const data = await Promise.all(page.map(toHook));
+        const hasMore = offset + limit < hooks.length;
+
         return {
-          ...hookData,
-          createdAt: new Date(hookData.createdAt),
-          isWebhook: hookData.isWebhook ?? false,
-          metadata: hookData.metadata ?? undefined,
+          data,
+          cursor: hasMore ? String(offset + limit) : null,
+          hasMore,
         };
       },
-      list: notImplemented("hooks.list"),
     } as unknown as World["hooks"],
-
-    // ------ Streamer (stub) ------
-
-    writeToStream: notImplemented(
-      "writeToStream"
-    ) as unknown as World["writeToStream"],
-    closeStream: notImplemented(
-      "closeStream"
-    ) as unknown as World["closeStream"],
-    readFromStream: notImplemented(
-      "readFromStream"
-    ) as unknown as World["readFromStream"],
-    listStreamsByRunId: notImplemented(
-      "listStreamsByRunId"
-    ) as unknown as World["listStreamsByRunId"],
-  };
+  } as unknown as World;
 }
