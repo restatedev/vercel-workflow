@@ -144,11 +144,13 @@ Restate's `ctx.run()` is a journaled side effect: execute once, store the result
 
 `sleep(duration)` → `RestatePromise.race([ctx.sleep(millis), awakeable])`.
 
-Each sleep creates both a durable timer and an awakeable, then races them. The awakeable is registered in the `workflowSleep` virtual object so that `wakeUp()` can resolve it to end the sleep early. The awakeable ID itself serves as the unique identifier for each sleep — no separate correlation ID is needed.
+Each sleep creates both a durable timer and an awakeable, then races them. The awakeable is registered in the `workflowSleep` virtual object so that `wakeUp()` can resolve it to end the sleep early.
 
 On completion (either timer or wakeUp), a fire-and-forget `complete` call removes the entry from the virtual object.
 
 **Duration parsing**: Supports `number` (ms), `string` (parsed by the `ms` library: `"5s"`, `"1h"`, `"24h"`), and `Date` (duck-typed via `.getTime()` because VM Date objects have a different prototype).
+
+**Correlation IDs**: Each sleep gets a deterministic `correlationId` via `ctx.rand.uuidv4()` (deterministic for replay safety). This is how `wakeUp({ correlationIds: [...] })` targets specific sleeps.
 
 ### Durable Fetch
 

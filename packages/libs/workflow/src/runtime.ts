@@ -1034,6 +1034,16 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
       });
     }
 
+    // Also register with the VM's Symbol.dispose if it differs from the host's.
+    // vm.createContext() has its own Symbol constructor where dispose may be
+    // polyfilled to a different value than the host's native Symbol.dispose.
+    const vmDispose = (ctx.globalThis.Symbol as Record<string, unknown>)
+      ?.dispose as symbol | undefined;
+    if (vmDispose && vmDispose !== Symbol.dispose) {
+      (hook as unknown as Record<symbol, unknown>)[vmDispose] = () =>
+        hook.dispose();
+    }
+
     return hook;
   };
 }
