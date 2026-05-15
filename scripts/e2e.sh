@@ -60,6 +60,7 @@ docker rm -f "$DOCKER_CONTAINER" 2>/dev/null || true
 # the test is just polling for status. Bump for tests that exercise retries.
 docker run -d --name "$DOCKER_CONTAINER" \
   -p 8080:8080 -p 9070:9070 \
+  --add-host=host.docker.internal:host-gateway \
   -e RESTATE_DEFAULT_RETRY_POLICY__MAX_ATTEMPTS="${RESTATE_MAX_ATTEMPTS:-1}" \
   -e RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS=kill \
   -e RESTATE_DEFAULT_RETRY_POLICY__INITIAL_INTERVAL=100ms \
@@ -109,11 +110,10 @@ for i in $(seq 1 60); do
 done
 
 # --- Register the deployment with Restate ---
-if [[ "$(uname)" == "Darwin" ]]; then
-  DOCKER_HOST_ADDR="host.docker.internal"
-else
-  DOCKER_HOST_ADDR="localhost"
-fi
+# Use host.docker.internal everywhere: it works natively on macOS, and the
+# `--add-host=host.docker.internal:host-gateway` flag on `docker run` makes
+# it resolve on Linux too.
+DOCKER_HOST_ADDR="host.docker.internal"
 
 log "Warming up .restate-well-known route (Turbopack compiles on-demand)..."
 curl -s "http://localhost:3000/.restate-well-known" -o /dev/null || true
