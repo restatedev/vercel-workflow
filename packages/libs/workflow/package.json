@@ -50,6 +50,7 @@
   "scripts": {
     "test": "turbo run _test --filter={.}...",
     "_test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts --reporter=default --reporter=json --outputFile=e2e-results.json",
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc --noEmit && tsdown",
     "dev": "tsc --noEmit --watch",
@@ -82,6 +83,7 @@
     "@restatedev/restate-sdk-zod": "catalog:",
     "@types/ms": "^2.1.0",
     "@vercel/queue": "catalog:",
+    "@workflow/core": "catalog:",
     "@workflow/errors": "catalog:",
     "@workflow/world": "catalog:",
     "workflow": "catalog:",

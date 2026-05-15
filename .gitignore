@@ -14,3 +14,9 @@ package/*
 .tarballs
 .workflow-data
 e2e-reports
+packages/libs/workflow/e2e-diagnostics-unknown-local.json
+packages/libs/workflow/e2e-results.json
+release-readiness.md
+server-restate.log
+docker-restate.log
+level2-plan.md
