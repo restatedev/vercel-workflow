@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/require-await */
+ 
 import { createHook } from "workflow";
 import { triggerResume } from "./_callback.js";
 

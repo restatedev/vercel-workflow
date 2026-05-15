@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/require-await */
+ 
 /**
  * Simplest example of a workflow with multiple steps
  */

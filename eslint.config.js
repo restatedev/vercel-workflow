@@ -12,6 +12,7 @@ export default [
       "**/.next/**",
       "**/.well-known/**",
       "**/.swc/**",
+      "**/vendored/**",
     ],
   },
 
@@ -48,6 +49,15 @@ export default [
   {
     files: ["**/*.config.{js,ts,mjs,mts}"],
     ...tseslint.configs.disableTypeChecked,
+  },
+
+  // Workflow step / workflow functions use `async` as the framework's marker
+  // for "this is a step or workflow", so async-without-await is idiomatic.
+  {
+    files: ["packages/examples/workflow/src/workflows/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/require-await": "off",
+    },
   },
 
   {

@@ -17,7 +17,7 @@ export async function POST(_request: Request) {
       text: "/stop",
     });
     return new NextResponse("OK");
-  } catch (error) {
+  } catch {
     return new NextResponse("Hook not found");
   }
 }

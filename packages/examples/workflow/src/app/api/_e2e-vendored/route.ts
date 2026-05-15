@@ -12,6 +12,6 @@ void _e2e;
 void _dup;
 void _react;
 
-export async function GET() {
+export function GET() {
   return new Response("ok");
 }

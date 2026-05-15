@@ -65,6 +65,7 @@ docker run -d --name "$DOCKER_CONTAINER" \
   -e RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS=kill \
   -e RESTATE_DEFAULT_RETRY_POLICY__INITIAL_INTERVAL=100ms \
   -e RESTATE_DEFAULT_RETRY_POLICY__MAX_INTERVAL=1s \
+  -e RESTATE_WORKER__INVOKER__INACTIVITY_TIMEOUT=0s \
   docker.io/restatedev/restate:1.6.2
 
 log "Waiting for Restate to be ready..."
