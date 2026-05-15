@@ -468,7 +468,6 @@ export function createWorld(): World {
           hasMore,
         };
       },
-      list: notImplemented("hooks.list"),
     } as unknown as World["hooks"],
   } as unknown as World;
 }
