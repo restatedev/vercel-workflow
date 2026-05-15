@@ -10,7 +10,7 @@ import { getStepMetadata } from "workflow";
 const chargeProvider = {
   create(
     params: { amount: number; currency: string; customer: string },
-    options: { idempotencyKey: string },
+    options: { idempotencyKey: string }
   ) {
     console.log("Creating charge", params, "with key", options.idempotencyKey);
     return Promise.resolve({
@@ -30,7 +30,7 @@ async function chargeUser(userId: string, amount: number) {
   // retries after a failure.
   return await chargeProvider.create(
     { amount, currency: "usd", customer: userId },
-    { idempotencyKey: stepId },
+    { idempotencyKey: stepId }
   );
 }
 

@@ -1,15 +1,15 @@
-import { spawn } from 'node:child_process';
-import fs from 'node:fs';
-import path, { dirname } from 'node:path';
-import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
-import { onTestFailed } from 'vitest';
-import type { Run } from '@workflow/core/runtime';
-import { getWorld } from '@workflow/core/runtime';
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path, { dirname } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
+import { onTestFailed } from "vitest";
+import type { Run } from "@workflow/core/runtime";
+import { getWorld } from "@workflow/core/runtime";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultCliTimeoutMs = Number(
-  process.env.WORKFLOW_E2E_CLI_TIMEOUT_MS ?? '20000'
+  process.env.WORKFLOW_E2E_CLI_TIMEOUT_MS ?? "20000"
 );
 
 function splitArgs(raw: string): string[] {
@@ -29,16 +29,16 @@ export function getWorkbenchAppPath(overrideAppName?: string): string {
   }
 
   if (!appName) {
-    throw new Error('`APP_NAME` environment variable is not set');
+    throw new Error("`APP_NAME` environment variable is not set");
   }
-  return path.join(__dirname, '../../../workbench', appName);
+  return path.join(__dirname, "../../../workbench", appName);
 }
 
 export function isLocalDeployment(): boolean {
   const deploymentUrl = process.env.DEPLOYMENT_URL;
   if (!deploymentUrl) return false;
 
-  const localHosts = ['localhost', '127.0.0.1'];
+  const localHosts = ["localhost", "127.0.0.1"];
   return localHosts.some((host) => deploymentUrl.includes(host));
 }
 
@@ -51,7 +51,7 @@ export function hasStepSourceMaps(): boolean {
   // Next.js does not consume inline sourcemaps AT ALL for step bundles
   // TODO: we need to fix this
   const appName = process.env.APP_NAME as string;
-  if (['nextjs-webpack', 'nextjs-turbopack'].includes(appName)) {
+  if (["nextjs-webpack", "nextjs-turbopack"].includes(appName)) {
     return false;
   }
 
@@ -59,11 +59,11 @@ export function hasStepSourceMaps(): boolean {
   // for all frameworks EXCEPT sveltekit, thanks to ESM step bundles with
   // inline source maps.
   if (!isLocalDeployment()) {
-    return appName !== 'sveltekit';
+    return appName !== "sveltekit";
   }
 
   // NestJS preserves source maps in all builds including prod
-  if (appName === 'nest') {
+  if (appName === "nest") {
     return true;
   }
 
@@ -94,7 +94,7 @@ export function hasWorkflowSourceMaps(): boolean {
   // TODO: figure out how to get sourcemaps working in these frameworks too
   if (
     process.env.DEV_TEST_CONFIG &&
-    ['vite', 'astro', 'sveltekit'].includes(appName)
+    ["vite", "astro", "sveltekit"].includes(appName)
   ) {
     return false;
   }
@@ -106,11 +106,11 @@ export function hasWorkflowSourceMaps(): boolean {
 function getCliArgs(): string {
   const deploymentUrl = process.env.DEPLOYMENT_URL;
   if (!deploymentUrl) {
-    throw new Error('`DEPLOYMENT_URL` environment variable is not set');
+    throw new Error("`DEPLOYMENT_URL` environment variable is not set");
   }
 
   if (isLocalDeployment()) {
-    return '';
+    return "";
   }
 
   return `--backend vercel --verbose`;
@@ -123,7 +123,7 @@ const awaitCommand = async (
   timeout = defaultCliTimeoutMs,
   envOverrides?: Record<string, string | undefined>
 ) => {
-  console.log(`[Debug]: Executing ${command} ${args.join(' ')}`);
+  console.log(`[Debug]: Executing ${command} ${args.join(" ")}`);
   console.log(`[Debug]: in CWD: ${cwd}`);
 
   return await new Promise<{ stdout: string; stderr: string }>(
@@ -133,19 +133,19 @@ const awaitCommand = async (
         cwd,
         env: {
           ...process.env,
-          DEBUG: '1',
-          WORKFLOW_NO_UPDATE_CHECK: '1',
+          DEBUG: "1",
+          WORKFLOW_NO_UPDATE_CHECK: "1",
           ...envOverrides,
         },
       });
 
-      let stdout = '';
-      let stderr = '';
+      let stdout = "";
+      let stderr = "";
 
       if (child.stdout) {
-        child.stdout.on('data', (chunk) => {
+        child.stdout.on("data", (chunk) => {
           const text = Buffer.isBuffer(chunk)
-            ? chunk.toString('utf8')
+            ? chunk.toString("utf8")
             : String(chunk);
           process.stdout.write(chunk);
           stdout += text;
@@ -153,26 +153,26 @@ const awaitCommand = async (
       }
 
       if (child.stderr) {
-        child.stderr.on('data', (chunk) => {
+        child.stderr.on("data", (chunk) => {
           const text = Buffer.isBuffer(chunk)
-            ? chunk.toString('utf8')
+            ? chunk.toString("utf8")
             : String(chunk);
           process.stderr.write(chunk);
           stderr += text;
         });
       }
 
-      child.on('error', (err) => reject(err));
-      child.on('close', (code, signal) => {
+      child.on("error", (err) => reject(err));
+      child.on("close", (code, signal) => {
         if (code !== 0) {
           const exitReason = signal
             ? `killed by signal ${signal}`
             : `exited with code ${code}`;
           const errorMessage = [
-            `CLI command failed (${exitReason}): ${command} ${args.join(' ')}`,
-            stderr ? `\n--- stderr ---\n${stderr}` : '',
-            stdout ? `\n--- stdout ---\n${stdout}` : '',
-          ].join('');
+            `CLI command failed (${exitReason}): ${command} ${args.join(" ")}`,
+            stderr ? `\n--- stderr ---\n${stderr}` : "",
+            stdout ? `\n--- stdout ---\n${stdout}` : "",
+          ].join("");
           reject(new Error(errorMessage));
           return;
         }
@@ -190,7 +190,7 @@ export function getProtectionBypassHeaders(): HeadersInit {
   const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
   if (bypassSecret) {
     return {
-      'x-vercel-protection-bypass': bypassSecret,
+      "x-vercel-protection-bypass": bypassSecret,
     };
   }
   return {};
@@ -201,12 +201,12 @@ export const cliInspectJson = async (args: string) => {
   const cliArgs = splitArgs(getCliArgs());
   const inspectArgs = splitArgs(args);
   const result = await awaitCommand(
-    'node',
+    "node",
     [
-      './node_modules/workflow/bin/run.js',
-      'inspect',
-      '--json',
-      '--decrypt',
+      "./node_modules/workflow/bin/run.js",
+      "inspect",
+      "--json",
+      "--decrypt",
       ...inspectArgs,
       ...cliArgs,
     ],
@@ -215,18 +215,18 @@ export const cliInspectJson = async (args: string) => {
   if (!result.stdout.trim()) {
     throw new Error(
       [
-        'CLI produced no stdout output (expected JSON)',
-        result.stderr ? `\n--- stderr ---\n${result.stderr}` : '',
-      ].join('')
+        "CLI produced no stdout output (expected JSON)",
+        result.stderr ? `\n--- stderr ---\n${result.stderr}` : "",
+      ].join("")
     );
   }
   try {
-    console.log('Result:', result.stdout);
+    console.log("Result:", result.stdout);
     const json = JSON.parse(result.stdout);
     return { json, stdout: result.stdout, stderr: result.stderr };
   } catch (err) {
-    console.error('Stdout:', result.stdout);
-    console.error('Stderr:', result.stderr);
+    console.error("Stdout:", result.stdout);
+    console.error("Stderr:", result.stderr);
     err.message = `Error parsing JSON result from CLI: ${err.message}`;
     throw err;
   }
@@ -240,8 +240,8 @@ export const cliCancel = async (runId: string) => {
   const cliAppPath = getWorkbenchAppPath();
   const cliArgs = splitArgs(getCliArgs());
   const result = await awaitCommand(
-    'node',
-    ['./node_modules/workflow/bin/run.js', 'cancel', runId, ...cliArgs],
+    "node",
+    ["./node_modules/workflow/bin/run.js", "cancel", runId, ...cliArgs],
     cliAppPath,
     10_000
   );
@@ -270,7 +270,7 @@ export interface WorkflowManifest {
 // Cached manifest fetched from the deployment
 let cachedManifest: WorkflowManifest | null = null;
 const manifestRetryTimeoutMs = Number(
-  process.env.WORKFLOW_E2E_MANIFEST_RETRY_MS ?? '10000'
+  process.env.WORKFLOW_E2E_MANIFEST_RETRY_MS ?? "10000"
 );
 const manifestRetryIntervalMs = 250;
 
@@ -286,7 +286,7 @@ export async function fetchManifest(
   const forceRefresh = options?.forceRefresh ?? false;
   if (cachedManifest && !forceRefresh) return cachedManifest;
 
-  const url = new URL('/.well-known/workflow/v1/manifest.json', deploymentUrl);
+  const url = new URL("/.well-known/workflow/v1/manifest.json", deploymentUrl);
   const res = await fetch(url, {
     headers: getProtectionBypassHeaders(),
   });
@@ -316,9 +316,9 @@ export function findWorkflowMetadataInManifest(
     }
   }
 
-  const fileWithoutExt = workflowFile.replace(/\.tsx?$/, '');
+  const fileWithoutExt = workflowFile.replace(/\.tsx?$/, "");
   for (const [manifestFile, functions] of Object.entries(manifest.workflows)) {
-    const manifestFileWithoutExt = manifestFile.replace(/\.tsx?$/, '');
+    const manifestFileWithoutExt = manifestFile.replace(/\.tsx?$/, "");
     if (
       manifestFileWithoutExt.endsWith(fileWithoutExt) ||
       fileWithoutExt.endsWith(manifestFileWithoutExt)
@@ -337,7 +337,7 @@ export function getFallbackWorkflowId(
   workflowFile: string,
   workflowFn: string
 ): string {
-  const fileWithoutExt = workflowFile.replace(/\.tsx?$/, '');
+  const fileWithoutExt = workflowFile.replace(/\.tsx?$/, "");
   // Keep this in sync with the SWC transform ID format. This fallback is
   // intentionally coupled so tests can continue running when deferred manifest
   // publication lags behind discovery in staged/out-of-monorepo scenarios.
@@ -463,12 +463,12 @@ export function trackRun<T>(
  * Build a Vercel observability dashboard URL for a workflow run.
  */
 function getObservabilityDashboardUrl(runId: string): string | null {
-  const teamSlug = 'vercel-labs';
+  const teamSlug = "vercel-labs";
   const projectSlug = process.env.WORKFLOW_VERCEL_PROJECT_SLUG;
   const env = process.env.WORKFLOW_VERCEL_ENV;
   if (!projectSlug || !env) return null;
 
-  const environment = env === 'production' ? 'production' : 'preview';
+  const environment = env === "production" ? "production" : "preview";
   return `https://vercel.com/${teamSlug}/${projectSlug}/observability/workflows/runs/${runId}?environment=${environment}`;
 }
 
@@ -478,8 +478,8 @@ function getObservabilityDashboardUrl(runId: string): string | null {
 async function getRunDiagnostics(tracked: TrackedRun): Promise<string> {
   const { run, workflowFile, workflowFn } = tracked;
   const lines: string[] = [
-    '',
-    '━━━ Workflow Run Diagnostics ━━━',
+    "",
+    "━━━ Workflow Run Diagnostics ━━━",
     `Run ID:     ${run.runId}`,
   ];
 
@@ -518,7 +518,7 @@ async function getRunDiagnostics(tracked: TrackedRun): Promise<string> {
       );
       if (runData.error.stack) {
         lines.push(
-          `Stack:      ${runData.error.stack.split('\n').slice(0, 3).join('\n            ')}`
+          `Stack:      ${runData.error.stack.split("\n").slice(0, 3).join("\n            ")}`
         );
       }
     }
@@ -529,8 +529,8 @@ async function getRunDiagnostics(tracked: TrackedRun): Promise<string> {
         runId: run.runId,
       });
       if (events.length > 0) {
-        lines.push('');
-        lines.push('Event Timeline:');
+        lines.push("");
+        lines.push("Event Timeline:");
         const baseTime = events[0].createdAt?.getTime?.() ?? 0;
         for (const event of events) {
           const elapsed = baseTime
@@ -538,19 +538,19 @@ async function getRunDiagnostics(tracked: TrackedRun): Promise<string> {
             : 0;
           const prefix = `  +${elapsed.toFixed(1)}s`;
           let detail = event.eventType;
-          if ('eventData' in event) {
+          if ("eventData" in event) {
             const data = (event as any).eventData;
             if (data?.stepName) detail += ` (${data.stepName})`;
             if (data?.error?.message) detail += ` — ${data.error.message}`;
           }
-          if ('correlationId' in event && event.correlationId) {
+          if ("correlationId" in event && event.correlationId) {
             detail += ` [${event.correlationId}]`;
           }
           lines.push(`${prefix}  ${detail}`);
         }
       }
     } catch {
-      lines.push('Events:     (failed to fetch)');
+      lines.push("Events:     (failed to fetch)");
     }
   } catch (e) {
     lines.push(`Status:     (failed to fetch: ${(e as Error).message})`);
@@ -570,10 +570,10 @@ async function getRunDiagnostics(tracked: TrackedRun): Promise<string> {
     lines.push(`Dashboard:  ${dashboardUrl}`);
   }
 
-  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  lines.push('');
+  lines.push("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  lines.push("");
 
-  return lines.join('\n');
+  return lines.join("\n");
 }
 
 /**
@@ -595,9 +595,9 @@ function emitGitHubAnnotation(
   const dashboardUrl = getObservabilityDashboardUrl(run.runId);
   const parts = [`Run ${run.runId}`];
   if (dashboardUrl) parts.push(dashboardUrl);
-  parts.push(message.split('\n')[0].slice(0, 200));
+  parts.push(message.split("\n")[0].slice(0, 200));
 
-  const annotation = parts.join(' | ');
+  const annotation = parts.join(" | ");
 
   // Write directly to stdout bypassing vitest's console interceptor.
   // Vitest prefixes console.log output with ANSI codes which prevents
@@ -618,7 +618,7 @@ export function setupRunTracking(testName: string) {
   trackedRuns = [];
   onTestFailed(
     async (result) => {
-      const errorMessage = result.errors?.[0]?.message || 'Test failed';
+      const errorMessage = result.errors?.[0]?.message || "Test failed";
 
       for (const tracked of trackedRuns) {
         try {
@@ -637,7 +637,7 @@ export function setupRunTracking(testName: string) {
 }
 
 // Current test name for auto-tracking
-let currentTestName = 'unknown';
+let currentTestName = "unknown";
 
 /**
  * Write diagnostics sidecar file with per-test run info for the aggregation script.
@@ -646,9 +646,9 @@ let currentTestName = 'unknown';
 export function writeDiagnosticsSidecar() {
   if (globalCollectedRunIds.length === 0) return;
 
-  const appName = process.env.APP_NAME || 'unknown';
+  const appName = process.env.APP_NAME || "unknown";
   const isVercel = !!process.env.WORKFLOW_VERCEL_ENV;
-  const backend = isVercel ? 'vercel' : 'local';
+  const backend = isVercel ? "vercel" : "local";
   const filePath = path.resolve(
     process.cwd(),
     `e2e-diagnostics-${appName}-${backend}.json`
@@ -663,13 +663,13 @@ export function writeDiagnosticsSidecar() {
 }
 
 export const cliHealthJson = async (options?: {
-  endpoint?: 'workflow' | 'step' | 'both';
+  endpoint?: "workflow" | "step" | "both";
   timeout?: number;
 }) => {
   const cliAppPath = getWorkbenchAppPath();
   const cliArgs = splitArgs(getCliArgs());
 
-  const args = ['./node_modules/workflow/bin/run.js', 'health', '--json'];
+  const args = ["./node_modules/workflow/bin/run.js", "health", "--json"];
 
   if (options?.endpoint) {
     args.push(`--endpoint=${options.endpoint}`);
@@ -689,7 +689,7 @@ export const cliHealthJson = async (options?: {
   }
 
   const result = await awaitCommand(
-    'node',
+    "node",
     args,
     cliAppPath,
     45_000,
@@ -698,18 +698,18 @@ export const cliHealthJson = async (options?: {
   if (!result.stdout.trim()) {
     throw new Error(
       [
-        'CLI health check produced no stdout output (expected JSON)',
-        result.stderr ? `\n--- stderr ---\n${result.stderr}` : '',
-      ].join('')
+        "CLI health check produced no stdout output (expected JSON)",
+        result.stderr ? `\n--- stderr ---\n${result.stderr}` : "",
+      ].join("")
     );
   }
   try {
-    console.log('Health check result:', result.stdout);
+    console.log("Health check result:", result.stdout);
     const json = JSON.parse(result.stdout);
     return { json, stdout: result.stdout, stderr: result.stderr };
   } catch (err) {
-    console.error('Stdout:', result.stdout);
-    console.error('Stderr:', result.stderr);
+    console.error("Stdout:", result.stdout);
+    console.error("Stderr:", result.stderr);
     (err as Error).message =
       `Error parsing JSON result from health CLI: ${(err as Error).message}`;
     throw err;

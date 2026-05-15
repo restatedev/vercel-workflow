@@ -5,5 +5,5 @@
  * from within a step to verify path alias imports work correctly.
  */
 export function pathsAliasHelper() {
-  return 'pathsAliasHelper';
+  return "pathsAliasHelper";
 }

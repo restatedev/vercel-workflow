@@ -17,8 +17,12 @@ interface CallbackRequest {
 }
 
 export async function POST(request: Request) {
-  const { callbackUrl, payload, delayMs = 200, method = "POST" } =
-    (await request.json()) as CallbackRequest;
+  const {
+    callbackUrl,
+    payload,
+    delayMs = 200,
+    method = "POST",
+  } = (await request.json()) as CallbackRequest;
 
   console.log(`[_callback] POSTing to ${callbackUrl} with payload:`, payload);
 

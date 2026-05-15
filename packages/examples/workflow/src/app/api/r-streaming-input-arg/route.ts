@@ -4,7 +4,10 @@ import { NextResponse } from "next/server.js";
 
 export async function POST(request: Request) {
   if (!request.body) {
-    return NextResponse.json({ error: "Missing request body" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing request body" },
+      { status: 400 }
+    );
   }
 
   const run = await start(streamProcessingWorkflow, [request.body]);

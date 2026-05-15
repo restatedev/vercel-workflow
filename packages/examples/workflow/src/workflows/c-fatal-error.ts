@@ -20,7 +20,7 @@ async function callApi(endpoint: string) {
 }
 
 export async function callApiWorkflow(endpoint: string) {
-  'use workflow';
+  "use workflow";
 
   const result = await callApi(endpoint);
 

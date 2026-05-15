@@ -34,12 +34,12 @@ export class Vector {
   }
 
   /** Custom serialization - converts instance to plain object */
-  static [Symbol.for('workflow-serialize')](instance: Vector) {
+  static [Symbol.for("workflow-serialize")](instance: Vector) {
     return { x: instance.x, y: instance.y, z: instance.z };
   }
 
   /** Custom deserialization - reconstructs instance from plain object */
-  static [Symbol.for('workflow-deserialize')](data: {
+  static [Symbol.for("workflow-deserialize")](data: {
     x: number;
     y: number;
     z: number;

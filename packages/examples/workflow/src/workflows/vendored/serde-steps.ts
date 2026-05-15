@@ -6,16 +6,16 @@
  * step calls. This tests cross-context class registration.
  */
 
-import { Vector } from './serde-models';
+import { Vector } from "./serde-models";
 
 /**
  * Step that receives a Vector and scales it.
  * Tests: workflow -> step deserialization, step -> workflow serialization
  */
 export async function scaleVector(vector: Vector, factor: number) {
-  'use step';
+  "use step";
   // Verify the vector was properly deserialized and has its methods
-  console.log('Vector magnitude:', vector.magnitude());
+  console.log("Vector magnitude:", vector.magnitude());
   // Scale and return (will be serialized on return)
   return vector.scale(factor);
 }
@@ -25,10 +25,10 @@ export async function scaleVector(vector: Vector, factor: number) {
  * Tests: workflow -> step deserialization of multiple instances
  */
 export async function addVectors(v1: Vector, v2: Vector) {
-  'use step';
+  "use step";
   // Verify both vectors have their methods
-  console.log('v1 magnitude:', v1.magnitude());
-  console.log('v2 magnitude:', v2.magnitude());
+  console.log("v1 magnitude:", v1.magnitude());
+  console.log("v2 magnitude:", v2.magnitude());
   return v1.add(v2);
 }
 
@@ -37,7 +37,7 @@ export async function addVectors(v1: Vector, v2: Vector) {
  * Tests: step creating new instance -> workflow deserialization
  */
 export async function createVector(x: number, y: number, z: number) {
-  'use step';
+  "use step";
   return new Vector(x, y, z);
 }
 
@@ -46,13 +46,13 @@ export async function createVector(x: number, y: number, z: number) {
  * Tests: serialization of arrays containing custom class instances
  */
 export async function sumVectors(vectors: Vector[]) {
-  'use step';
+  "use step";
   let totalX = 0;
   let totalY = 0;
   let totalZ = 0;
   for (const v of vectors) {
     // Verify each vector has its methods
-    console.log('Vector magnitude:', v.magnitude());
+    console.log("Vector magnitude:", v.magnitude());
     totalX += v.x;
     totalY += v.y;
     totalZ += v.z;

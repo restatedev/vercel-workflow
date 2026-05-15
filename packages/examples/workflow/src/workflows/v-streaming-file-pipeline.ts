@@ -6,7 +6,7 @@ async function downloadFile(url: string): Promise<ReadableStream<Uint8Array>> {
 }
 
 async function transformData(
-  input: ReadableStream<Uint8Array>,
+  input: ReadableStream<Uint8Array>
 ): Promise<ReadableStream<Uint8Array>> {
   "use step";
 
@@ -15,7 +15,7 @@ async function transformData(
       transform(chunk, controller) {
         controller.enqueue(chunk);
       },
-    }),
+    })
   );
 }
 

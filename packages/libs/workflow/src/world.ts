@@ -175,12 +175,10 @@ export function createWorld(): World {
       const payload = message as { runId: string };
 
       // Submit the workflow run (fire-and-forget — submit awaits completion internally)
-      await restate
-        .objectSendClient(workflowRunObj, payload.runId)
-        .submit({
-          idempotencyKey: opts?.idempotencyKey,
-          delaySeconds: opts?.delaySeconds,
-        });
+      await restate.objectSendClient(workflowRunObj, payload.runId).submit({
+        idempotencyKey: opts?.idempotencyKey,
+        delaySeconds: opts?.delaySeconds,
+      });
 
       return { messageId: payload.runId as MessageId };
     },
@@ -206,15 +204,17 @@ export function createWorld(): World {
         return toWorkflowRun(data);
       },
 
-      async list(params: {
-        workflowName?: string;
-        status?: WorkflowRunData["status"];
-        pagination?: {
-          limit?: number;
-          cursor?: string;
-          sortOrder?: "asc" | "desc";
-        };
-      } = {}) {
+      async list(
+        params: {
+          workflowName?: string;
+          status?: WorkflowRunData["status"];
+          pagination?: {
+            limit?: number;
+            cursor?: string;
+            sortOrder?: "asc" | "desc";
+          };
+        } = {}
+      ) {
         const rows = await restateQuery<{
           service_key: string;
           value_utf8: string;
@@ -282,7 +282,9 @@ export function createWorld(): World {
             }
           ).eventData;
 
-          const serviceName = parseWorkflowName(eventData.workflowName)?.shortName ?? eventData.workflowName;
+          const serviceName =
+            parseWorkflowName(eventData.workflowName)?.shortName ??
+            eventData.workflowName;
 
           // Deserialize input from Vercel's binary format to raw JSON
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -309,12 +311,10 @@ export function createWorld(): World {
         }
 
         if (eventType === "hook_received" && runId) {
-          const eventData = (
-            data as {
-              correlationId: string;
-              eventData: { payload: unknown };
-            }
-          );
+          const eventData = data as {
+            correlationId: string;
+            eventData: { payload: unknown };
+          };
           // The payload was serialized by Vercel's dehydrateStepReturnValue.
           // Deserialize it back to the raw value before sending to Restate.
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -338,9 +338,7 @@ export function createWorld(): World {
 
           // Forward to Restate's workflowHooks virtual object
           const token = eventData.correlationId;
-          await restate
-            .objectClient(hookObj, token)
-            .resolve(rawPayload);
+          await restate.objectClient(hookObj, token).resolve(rawPayload);
           return {};
         }
 
@@ -360,9 +358,7 @@ export function createWorld(): World {
       },
 
       get: notImplemented("events.get") as unknown as World["events"]["get"],
-      list: notImplemented(
-        "events.list"
-      ) as unknown as World["events"]["list"],
+      list: notImplemented("events.list") as unknown as World["events"]["list"],
       listByCorrelationId: notImplemented(
         "events.listByCorrelationId"
       ) as unknown as World["events"]["listByCorrelationId"],
@@ -392,14 +388,16 @@ export function createWorld(): World {
         }
         return toHook(hookData);
       },
-      async list(params: {
-        runId?: string;
-        pagination?: {
-          limit?: number;
-          cursor?: string;
-          sortOrder?: "asc" | "desc";
-        };
-      } = {}) {
+      async list(
+        params: {
+          runId?: string;
+          pagination?: {
+            limit?: number;
+            cursor?: string;
+            sortOrder?: "asc" | "desc";
+          };
+        } = {}
+      ) {
         const rows = await restateQuery<{
           service_key: string;
           key: string;

@@ -2,7 +2,7 @@
 // Note: the upstream path-alias-resolution test (@repo/lib/...) has been inlined
 // as a relative import here. This means we no longer exercise tsconfig path alias
 // resolution, but the workflow runtime behaviour the test covers is unchanged.
-import { pathsAliasHelper } from './paths-alias-test';
+import { pathsAliasHelper } from "./paths-alias-test";
 import {
   createHook,
   createWebhook,
@@ -14,20 +14,20 @@ import {
   type RequestWithResponse,
   RetryableError,
   sleep,
-} from 'workflow';
-import { getHookByToken, getRun, resumeHook, Run, start } from 'workflow/api';
-import { importedStepOnly } from './_imported_step_only';
-import { callThrower, stepThatThrowsFromHelper } from './helpers';
+} from "workflow";
+import { getHookByToken, getRun, resumeHook, Run, start } from "workflow/api";
+import { importedStepOnly } from "./_imported_step_only";
+import { callThrower, stepThatThrowsFromHelper } from "./helpers";
 
 //////////////////////////////////////////////////////////
 
 export async function add(a: number, b: number) {
-  'use step';
+  "use step";
   return a + b;
 }
 
 export async function addTenWorkflow(input: number) {
-  'use workflow';
+  "use workflow";
   const a = await add(input, 2);
   const b = await add(a, 3);
   const c = await add(b, 5);
@@ -37,17 +37,17 @@ export async function addTenWorkflow(input: number) {
 //////////////////////////////////////////////////////////
 
 async function randomDelay(v: string) {
-  'use step';
+  "use step";
   await new Promise((resolve) => setTimeout(resolve, Math.random() * 3000));
   return v.toUpperCase();
 }
 
 export async function promiseAllWorkflow() {
-  'use workflow';
+  "use workflow";
   const [a, b, c] = await Promise.all([
-    randomDelay('a'),
-    randomDelay('b'),
-    randomDelay('c'),
+    randomDelay("a"),
+    randomDelay("b"),
+    randomDelay("c"),
   ]);
   return a + b + c;
 }
@@ -55,17 +55,17 @@ export async function promiseAllWorkflow() {
 //////////////////////////////////////////////////////////
 
 async function specificDelay(delay: number, v: string) {
-  'use step';
+  "use step";
   await new Promise((resolve) => setTimeout(resolve, delay));
   return v.toUpperCase();
 }
 
 export async function promiseRaceWorkflow() {
-  'use workflow';
+  "use workflow";
   const winner = await Promise.race([
-    specificDelay(10000, 'a'),
-    specificDelay(100, 'b'), // "b" should always win
-    specificDelay(20000, 'c'),
+    specificDelay(10000, "a"),
+    specificDelay(100, "b"), // "b" should always win
+    specificDelay(20000, "c"),
   ]);
   return winner;
 }
@@ -73,16 +73,16 @@ export async function promiseRaceWorkflow() {
 //////////////////////////////////////////////////////////
 
 async function stepThatFails() {
-  'use step';
-  throw new FatalError('step failed');
+  "use step";
+  throw new FatalError("step failed");
 }
 
 export async function promiseAnyWorkflow() {
-  'use workflow';
+  "use workflow";
   const winner = await Promise.any([
     stepThatFails(),
-    specificDelay(100, 'b'), // "b" should always win
-    specificDelay(6000, 'c'),
+    specificDelay(100, "b"), // "b" should always win
+    specificDelay(6000, "c"),
   ]);
   return winner;
 }
@@ -90,7 +90,7 @@ export async function promiseAnyWorkflow() {
 //////////////////////////////////////////////////////////
 
 export async function importedStepOnlyWorkflow() {
-  'use workflow';
+  "use workflow";
   return await importedStepOnly();
 }
 
@@ -99,33 +99,33 @@ export async function importedStepOnlyWorkflow() {
 // Name should not conflict with genStream in 3_streams.ts
 // TODO: swc transform should mangle names to avoid conflicts
 async function genReadableStream() {
-  'use step';
+  "use step";
   const encoder = new TextEncoder();
   return new ReadableStream({
     async start(controller) {
       for (let i = 0; i < 10; i++) {
-        console.log('enqueueing', i);
+        console.log("enqueueing", i);
         controller.enqueue(encoder.encode(`${i}\n`));
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
-      console.log('closing controller');
+      console.log("closing controller");
       controller.close();
     },
   });
 }
 
 export async function readableStreamWorkflow() {
-  'use workflow';
-  console.log('calling genReadableStream');
+  "use workflow";
+  console.log("calling genReadableStream");
   const stream = await genReadableStream();
-  console.log('genReadableStream returned', stream);
+  console.log("genReadableStream returned", stream);
   return stream;
 }
 
 //////////////////////////////////////////////////////////
 
 export async function hookWorkflow(token: string, customData: string) {
-  'use workflow';
+  "use workflow";
 
   type Payload = { message: string; customData: string; done?: boolean };
 
@@ -149,14 +149,14 @@ export async function hookWorkflow(token: string, customData: string) {
 //////////////////////////////////////////////////////////
 
 async function sendWebhookResponse(req: RequestWithResponse) {
-  'use step';
+  "use step";
   const body = await req.text();
-  await req.respondWith(new Response('Hello from webhook!'));
+  await req.respondWith(new Response("Hello from webhook!"));
   return body;
 }
 
 export async function webhookWorkflow() {
-  'use workflow';
+  "use workflow";
 
   type Payload = { url: string; method: string; body: string };
   const payloads: Payload[] = [];
@@ -165,12 +165,12 @@ export async function webhookWorkflow() {
   // before the test sends HTTP requests to them
   const webhookWithDefaultResponse = createWebhook();
 
-  const res = new Response('Hello from static response!', { status: 402 });
+  const res = new Response("Hello from static response!", { status: 402 });
   const webhookWithStaticResponse = createWebhook({
     respondWith: res,
   });
   const webhookWithManualResponse = createWebhook({
-    respondWith: 'manual',
+    respondWith: "manual",
   });
 
   // Webhook with default response
@@ -200,7 +200,7 @@ export async function webhookWorkflow() {
 //////////////////////////////////////////////////////////
 
 export async function sleepingWorkflow(durationMs = 10_000) {
-  'use workflow';
+  "use workflow";
   const startTime = Date.now();
   await sleep(durationMs);
   const endTime = Date.now();
@@ -208,9 +208,9 @@ export async function sleepingWorkflow(durationMs = 10_000) {
 }
 
 export async function parallelSleepWorkflow() {
-  'use workflow';
+  "use workflow";
   const startTime = Date.now();
-  await Promise.all(Array.from({ length: 10 }, () => sleep('1s')));
+  await Promise.all(Array.from({ length: 10 }, () => sleep("1s")));
   const endTime = Date.now();
   return { startTime, endTime };
 }
@@ -218,12 +218,12 @@ export async function parallelSleepWorkflow() {
 //////////////////////////////////////////////////////////
 
 async function nullByteStep() {
-  'use step';
-  return 'null byte \0';
+  "use step";
+  return "null byte \0";
 }
 
 export async function nullByteWorkflow() {
-  'use workflow';
+  "use workflow";
   const a = await nullByteStep();
   return a;
 }
@@ -231,14 +231,14 @@ export async function nullByteWorkflow() {
 //////////////////////////////////////////////////////////
 
 async function stepWithMetadata() {
-  'use step';
+  "use step";
   const stepMetadata = getStepMetadata();
   const workflowMetadata = getWorkflowMetadata();
   return { stepMetadata, workflowMetadata };
 }
 
 export async function workflowAndStepMetadataWorkflow() {
-  'use workflow';
+  "use workflow";
   const workflowMetadata = getWorkflowMetadata();
   const { stepMetadata, workflowMetadata: innerWorkflowMetadata } =
     await stepWithMetadata();
@@ -261,7 +261,7 @@ async function stepWithOutputStreamBinary(
   writable: WritableStream,
   text: string
 ) {
-  'use step';
+  "use step";
   const writer = writable.getWriter();
   // binary data
   await writer.write(new TextEncoder().encode(text));
@@ -269,7 +269,7 @@ async function stepWithOutputStreamBinary(
 }
 
 async function stepWithOutputStreamObject(writable: WritableStream, obj: any) {
-  'use step';
+  "use step";
   const writer = writable.getWriter();
   // object data
   await writer.write(obj);
@@ -277,32 +277,32 @@ async function stepWithOutputStreamObject(writable: WritableStream, obj: any) {
 }
 
 async function stepCloseOutputStream(writable: WritableStream) {
-  'use step';
+  "use step";
   await writable.close();
 }
 
 export async function outputStreamWorkflow() {
-  'use workflow';
+  "use workflow";
   const writable = getWritable();
-  const namedWritable = getWritable({ namespace: 'test' });
-  await sleep('1s');
-  await stepWithOutputStreamBinary(writable, 'Hello, world!');
-  await sleep('1s');
-  await stepWithOutputStreamBinary(namedWritable, 'Hello, named stream!');
-  await sleep('1s');
-  await stepWithOutputStreamObject(writable, { foo: 'test' });
-  await sleep('1s');
-  await stepWithOutputStreamObject(namedWritable, { foo: 'bar' });
-  await sleep('1s');
+  const namedWritable = getWritable({ namespace: "test" });
+  await sleep("1s");
+  await stepWithOutputStreamBinary(writable, "Hello, world!");
+  await sleep("1s");
+  await stepWithOutputStreamBinary(namedWritable, "Hello, named stream!");
+  await sleep("1s");
+  await stepWithOutputStreamObject(writable, { foo: "test" });
+  await sleep("1s");
+  await stepWithOutputStreamObject(namedWritable, { foo: "bar" });
+  await sleep("1s");
   await stepCloseOutputStream(writable);
   await stepCloseOutputStream(namedWritable);
-  return 'done';
+  return "done";
 }
 
 //////////////////////////////////////////////////////////
 
 async function stepWithOutputStreamInsideStep(text: string) {
-  'use step';
+  "use step";
   // Call getWritable directly inside the step function
   const writable = getWritable();
   const writer = writable.getWriter();
@@ -314,7 +314,7 @@ async function stepWithNamedOutputStreamInsideStep(
   namespace: string,
   obj: any
 ) {
-  'use step';
+  "use step";
   // Call getWritable with namespace directly inside the step function
   const writable = getWritable({ namespace });
   const writer = writable.getWriter();
@@ -323,35 +323,35 @@ async function stepWithNamedOutputStreamInsideStep(
 }
 
 async function stepCloseOutputStreamInsideStep(namespace?: string) {
-  'use step';
+  "use step";
   // Call getWritable directly inside the step function and close it
   const writable = getWritable({ namespace });
   await writable.close();
 }
 
 export async function outputStreamInsideStepWorkflow() {
-  'use workflow';
-  await sleep('1s');
-  await stepWithOutputStreamInsideStep('Hello from step!');
-  await sleep('1s');
-  await stepWithNamedOutputStreamInsideStep('step-ns', {
-    message: 'Hello from named stream in step!',
+  "use workflow";
+  await sleep("1s");
+  await stepWithOutputStreamInsideStep("Hello from step!");
+  await sleep("1s");
+  await stepWithNamedOutputStreamInsideStep("step-ns", {
+    message: "Hello from named stream in step!",
   });
-  await sleep('1s');
-  await stepWithOutputStreamInsideStep('Second message');
-  await sleep('1s');
-  await stepWithNamedOutputStreamInsideStep('step-ns', { counter: 42 });
-  await sleep('1s');
+  await sleep("1s");
+  await stepWithOutputStreamInsideStep("Second message");
+  await sleep("1s");
+  await stepWithNamedOutputStreamInsideStep("step-ns", { counter: 42 });
+  await sleep("1s");
   await stepCloseOutputStreamInsideStep();
-  await stepCloseOutputStreamInsideStep('step-ns');
-  return 'done';
+  await stepCloseOutputStreamInsideStep("step-ns");
+  return "done";
 }
 
 //////////////////////////////////////////////////////////
 
 export async function fetchWorkflow() {
-  'use workflow';
-  const response = await fetch('https://jsonplaceholder.typicode.com/todos/1');
+  "use workflow";
+  const response = await fetch("https://jsonplaceholder.typicode.com/todos/1");
   const data = await response.json();
   return data;
 }
@@ -362,7 +362,7 @@ export async function promiseRaceStressTestDelayStep(
   dur: number,
   resp: number
 ): Promise<number> {
-  'use step';
+  "use step";
 
   console.log(`sleep`, resp, `/`, dur);
   await new Promise((resolve) => setTimeout(resolve, dur));
@@ -372,7 +372,7 @@ export async function promiseRaceStressTestDelayStep(
 }
 
 export async function promiseRaceStressTestWorkflow() {
-  'use workflow';
+  "use workflow";
 
   const promises = new Map<number, Promise<number>>();
   const done: number[] = [];
@@ -397,7 +397,7 @@ export async function promiseRaceStressTestWorkflow() {
 //////////////////////////////////////////////////////////
 
 async function stepThatRetriesAndSucceeds() {
-  'use step';
+  "use step";
   const { attempt } = getStepMetadata();
   console.log(`stepThatRetriesAndSucceeds - attempt: ${attempt}`);
 
@@ -412,8 +412,8 @@ async function stepThatRetriesAndSucceeds() {
 }
 
 export async function retryAttemptCounterWorkflow() {
-  'use workflow';
-  console.log('Starting retry attempt counter workflow');
+  "use workflow";
+  console.log("Starting retry attempt counter workflow");
 
   // This step should fail twice and succeed on the third attempt
   const finalAttempt = await stepThatRetriesAndSucceeds();
@@ -425,11 +425,11 @@ export async function retryAttemptCounterWorkflow() {
 //////////////////////////////////////////////////////////
 
 async function stepThatThrowsRetryableError() {
-  'use step';
+  "use step";
   const { attempt, stepStartedAt } = getStepMetadata();
   if (attempt === 1) {
-    throw new RetryableError('Retryable error', {
-      retryAfter: '10s',
+    throw new RetryableError("Retryable error", {
+      retryAfter: "10s",
     });
   }
   return {
@@ -440,16 +440,16 @@ async function stepThatThrowsRetryableError() {
 }
 
 export async function crossFileErrorWorkflow() {
-  'use workflow';
+  "use workflow";
   // This will throw an error from the imported helpers.ts file
   callThrower();
-  return 'never reached';
+  return "never reached";
 }
 
 //////////////////////////////////////////////////////////
 
 export async function retryableAndFatalErrorWorkflow() {
-  'use workflow';
+  "use workflow";
 
   const retryableResult = await stepThatThrowsRetryableError();
 
@@ -469,7 +469,7 @@ export async function retryableAndFatalErrorWorkflow() {
 
 // Test that maxRetries = 0 means the step runs once but does not retry on failure
 async function stepWithNoRetries() {
-  'use step';
+  "use step";
   const { attempt } = getStepMetadata();
   console.log(`stepWithNoRetries - attempt: ${attempt}`);
   // Always fail - with maxRetries = 0, this should only run once
@@ -479,7 +479,7 @@ stepWithNoRetries.maxRetries = 0;
 
 // Test that maxRetries = 0 works when the step succeeds
 async function stepWithNoRetriesThatSucceeds() {
-  'use step';
+  "use step";
   const { attempt } = getStepMetadata();
   console.log(`stepWithNoRetriesThatSucceeds - attempt: ${attempt}`);
   return { attempt };
@@ -487,8 +487,8 @@ async function stepWithNoRetriesThatSucceeds() {
 stepWithNoRetriesThatSucceeds.maxRetries = 0;
 
 export async function maxRetriesZeroWorkflow() {
-  'use workflow';
-  console.log('Starting maxRetries = 0 workflow');
+  "use workflow";
+  console.log("Starting maxRetries = 0 workflow");
 
   // First, verify that a step with maxRetries = 0 can still succeed
   const successResult = await stepWithNoRetriesThatSucceeds();
@@ -500,7 +500,7 @@ export async function maxRetriesZeroWorkflow() {
     await stepWithNoRetries();
   } catch (error: any) {
     gotError = true;
-    console.log('Received error', typeof error, error, error.message);
+    console.log("Received error", typeof error, error, error.message);
     // Extract the attempt number from the error message
     const match = error.message?.match(/attempt (\d+)/);
     if (match) {
@@ -525,7 +525,7 @@ export async function hookCleanupTestWorkflow(
   token: string,
   customData: string
 ) {
-  'use workflow';
+  "use workflow";
 
   type Payload = { message: string; customData: string };
 
@@ -539,7 +539,7 @@ export async function hookCleanupTestWorkflow(
   return {
     message: payload.message,
     customData: payload.customData,
-    hookCleanupTestData: 'workflow_completed',
+    hookCleanupTestData: "workflow_completed",
   };
 }
 
@@ -556,7 +556,7 @@ export async function hookDisposeTestWorkflow(
   token: string,
   customData: string
 ) {
-  'use workflow';
+  "use workflow";
 
   type Payload = { message: string; customData: string };
 
@@ -576,47 +576,47 @@ export async function hookDisposeTestWorkflow(
   }
 
   // Token is now available for another workflow while we continue
-  await sleep('5s');
+  await sleep("5s");
 
   return {
     message,
     customData: customDataResult,
     disposed: true,
-    hookDisposeTestData: 'workflow_completed',
+    hookDisposeTestData: "workflow_completed",
   };
 }
 
 //////////////////////////////////////////////////////////
 
 export async function stepFunctionPassingWorkflow() {
-  'use workflow';
+  "use workflow";
   // Pass a step function reference to another step (without closure vars)
   const result = await stepWithStepFunctionArg(doubleNumber);
   return result;
 }
 
 async function stepWithStepFunctionArg(stepFn: (x: number) => Promise<number>) {
-  'use step';
+  "use step";
   // Call the passed step function reference
   const result = await stepFn(10);
   return result * 2;
 }
 
 async function doubleNumber(x: number) {
-  'use step';
+  "use step";
   return x * 2;
 }
 
 //////////////////////////////////////////////////////////
 
 export async function stepFunctionWithClosureWorkflow() {
-  'use workflow';
+  "use workflow";
   const multiplier = 3;
-  const prefix = 'Result: ';
+  const prefix = "Result: ";
 
   // Create a step function that captures closure variables
   const calculate = async (x: number) => {
-    'use step';
+    "use step";
     return `${prefix}${x * multiplier}`;
   };
 
@@ -629,7 +629,7 @@ async function stepThatCallsStepFn(
   stepFn: (x: number) => Promise<string>,
   value: number
 ) {
-  'use step';
+  "use step";
   // Call the passed step function - closure vars should be preserved
   const result = await stepFn(value);
   return `Wrapped: ${result}`;
@@ -638,14 +638,14 @@ async function stepThatCallsStepFn(
 //////////////////////////////////////////////////////////
 
 export async function closureVariableWorkflow(baseValue: number) {
-  'use workflow';
+  "use workflow";
   // biome-ignore lint/style/useConst: Intentionally using `let` instead of `const`
   let multiplier = 3;
-  const prefix = 'Result: ';
+  const prefix = "Result: ";
 
   // Nested step function that uses closure variables
   const calculate = async () => {
-    'use step';
+    "use step";
     const result = baseValue * multiplier;
     return `${prefix}${result}`;
   };
@@ -658,20 +658,20 @@ export async function closureVariableWorkflow(baseValue: number) {
 
 // Child workflow that will be spawned from another workflow
 export async function childWorkflow(value: number) {
-  'use workflow';
+  "use workflow";
   // Do some processing
   const doubled = await doubleValue(value);
   return { childResult: doubled, originalValue: value };
 }
 
 async function doubleValue(value: number) {
-  'use step';
+  "use step";
   return value * 2;
 }
 
 // Step function that spawns another workflow using start()
 async function spawnChildWorkflow(value: number) {
-  'use step';
+  "use step";
   // start() can only be called inside a step function, not directly in workflow code
   const childRun = await start(childWorkflow, [value]);
   return childRun.runId;
@@ -679,14 +679,14 @@ async function spawnChildWorkflow(value: number) {
 
 // Step function that waits for a workflow run to complete and returns its result
 async function awaitWorkflowResult<T>(runId: string) {
-  'use step';
+  "use step";
   const run = getRun<T>(runId);
   const result = await run.returnValue;
   return result;
 }
 
 export async function spawnWorkflowFromStepWorkflow(inputValue: number) {
-  'use workflow';
+  "use workflow";
   // Spawn the child workflow from inside a step function
   const childRunId = await spawnChildWorkflow(inputValue);
 
@@ -704,22 +704,22 @@ export async function spawnWorkflowFromStepWorkflow(inputValue: number) {
 }
 
 async function spawnChildWorkflowRun(value: number) {
-  'use step';
+  "use step";
   return await start(childWorkflow, [value]);
 }
 
 async function getRunIdFromRun(run: Run<unknown>) {
-  'use step';
+  "use step";
   return run.runId;
 }
 
 async function awaitRunFromRun<T>(run: Run<T>) {
-  'use step';
+  "use step";
   return await run.returnValue;
 }
 
 export async function runClassSerializationWorkflow(inputValue: number) {
-  'use workflow';
+  "use workflow";
 
   const childRun = await spawnChildWorkflowRun(inputValue);
   const isRunInWorkflow = childRun instanceof Run;
@@ -743,7 +743,7 @@ export async function runClassSerializationWorkflow(inputValue: number) {
  * Step that calls a helper function imported via path alias.
  */
 async function callPathsAliasHelper() {
-  'use step';
+  "use step";
   // Call the helper function imported via @repo/* path alias
   return pathsAliasHelper();
 }
@@ -754,7 +754,7 @@ async function callPathsAliasHelper() {
  * which resolves to a file outside the workbench directory.
  */
 export async function pathsAliasWorkflow() {
-  'use workflow';
+  "use workflow";
   // Call the step that uses the path alias helper
   const result = await callPathsAliasHelper();
   return result;
@@ -782,7 +782,7 @@ export async function pathsAliasWorkflow() {
 // --- Workflow Errors (errors thrown directly in workflow code) ---
 
 function errorNested3() {
-  throw new Error('Nested workflow error');
+  throw new Error("Nested workflow error");
 }
 
 function errorNested2() {
@@ -795,29 +795,29 @@ function errorNested1() {
 
 /** Test: Workflow error from nested function calls preserves stack trace */
 export async function errorWorkflowNested() {
-  'use workflow';
+  "use workflow";
   errorNested1();
-  return 'never reached';
+  return "never reached";
 }
 
 /** Test: Workflow error from imported module preserves file reference in stack */
 export async function errorWorkflowCrossFile() {
-  'use workflow';
+  "use workflow";
   callThrower(); // from helpers.ts - throws Error
-  return 'never reached';
+  return "never reached";
 }
 
 // --- Step Errors (errors thrown in steps that propagate to workflow) ---
 
 async function errorStepFn() {
-  'use step';
-  throw new Error('Step error message');
+  "use step";
+  throw new Error("Step error message");
 }
 errorStepFn.maxRetries = 0;
 
 /** Test: Step error message propagates correctly to workflow */
 export async function errorStepBasic() {
-  'use workflow';
+  "use workflow";
   try {
     await errorStepFn();
     return { caught: false, message: null, stack: null };
@@ -828,7 +828,7 @@ export async function errorStepBasic() {
 
 /** Test: Step error from imported module has function names in stack */
 export async function errorStepCrossFile() {
-  'use workflow';
+  "use workflow";
   try {
     await stepThatThrowsFromHelper(); // from helpers.ts
     return { caught: false, message: null, stack: null };
@@ -843,7 +843,7 @@ export async function errorStepCrossFile() {
 // ------------------------------------------------------------
 
 async function retryUntilAttempt3() {
-  'use step';
+  "use step";
   const { attempt } = getStepMetadata();
   if (attempt < 3) {
     throw new Error(`Failed on attempt ${attempt}`);
@@ -853,7 +853,7 @@ async function retryUntilAttempt3() {
 
 /** Test: Regular Error retries until success (succeeds on attempt 3) */
 export async function errorRetrySuccess() {
-  'use workflow';
+  "use workflow";
   const attempt = await retryUntilAttempt3();
   return { finalAttempt: attempt };
 }
@@ -861,24 +861,24 @@ export async function errorRetrySuccess() {
 // ---
 
 async function throwFatalError() {
-  'use step';
-  throw new FatalError('Fatal step error');
+  "use step";
+  throw new FatalError("Fatal step error");
 }
 
 /** Test: FatalError fails immediately without retry (attempt=1) */
 export async function errorRetryFatal() {
-  'use workflow';
+  "use workflow";
   await throwFatalError();
-  return 'never reached';
+  return "never reached";
 }
 
 // ---
 
 async function throwRetryableError() {
-  'use step';
+  "use step";
   const { attempt, stepStartedAt } = getStepMetadata();
   if (attempt === 1) {
-    throw new RetryableError('Retryable error', { retryAfter: '10s' });
+    throw new RetryableError("Retryable error", { retryAfter: "10s" });
   }
   return {
     attempt,
@@ -888,14 +888,14 @@ async function throwRetryableError() {
 
 /** Test: RetryableError respects custom retryAfter timing (waits 10s+) */
 export async function errorRetryCustomDelay() {
-  'use workflow';
+  "use workflow";
   return await throwRetryableError();
 }
 
 // ---
 
 async function throwWithNoRetries() {
-  'use step';
+  "use step";
   const { attempt } = getStepMetadata();
   throw new Error(`Failed on attempt ${attempt}`);
 }
@@ -903,7 +903,7 @@ throwWithNoRetries.maxRetries = 0;
 
 /** Test: maxRetries=0 runs once without retry on failure */
 export async function errorRetryDisabled() {
-  'use workflow';
+  "use workflow";
   try {
     await throwWithNoRetries();
     return { failed: false, attempt: null };
@@ -921,7 +921,7 @@ export async function errorRetryDisabled() {
 
 /** Test: FatalError can be caught and detected with FatalError.is() */
 export async function errorFatalCatchable() {
-  'use workflow';
+  "use workflow";
   try {
     await throwFatalError();
     return { caught: false, isFatal: false };
@@ -944,12 +944,12 @@ export async function errorFatalCatchable() {
  * caused a step to be missing.
  */
 export async function stepNotRegisteredCatchable() {
-  'use workflow';
+  "use workflow";
   // Manually invoke a step that doesn't exist in the deployment.
   // The SWC transform generates exactly this pattern for real step calls,
   // so this is equivalent to calling a step that wasn't bundled.
-  const ghost = (globalThis as any)[Symbol.for('WORKFLOW_USE_STEP')](
-    'step//./workflows/99_e2e//nonExistentStep'
+  const ghost = (globalThis as any)[Symbol.for("WORKFLOW_USE_STEP")](
+    "step//./workflows/99_e2e//nonExistentStep"
   );
   try {
     await ghost();
@@ -963,9 +963,9 @@ export async function stepNotRegisteredCatchable() {
  * Test: step not registered causes the run to fail when not caught.
  */
 export async function stepNotRegisteredUncaught() {
-  'use workflow';
-  const ghost = (globalThis as any)[Symbol.for('WORKFLOW_USE_STEP')](
-    'step//./workflows/99_e2e//anotherNonExistentStep'
+  "use workflow";
+  const ghost = (globalThis as any)[Symbol.for("WORKFLOW_USE_STEP")](
+    "step//./workflows/99_e2e//anotherNonExistentStep"
   );
   // Don't catch — the step failure should propagate and fail the run
   return await ghost();
@@ -984,13 +984,13 @@ export async function stepNotRegisteredUncaught() {
 export class MathService {
   /** Static step: add two numbers */
   static async add(a: number, b: number): Promise<number> {
-    'use step';
+    "use step";
     return a + b;
   }
 
   /** Static step: multiply two numbers */
   static async multiply(a: number, b: number): Promise<number> {
-    'use step';
+    "use step";
     return a * b;
   }
 }
@@ -1001,7 +1001,7 @@ export class MathService {
 export class Calculator {
   /** Static workflow: uses MathService static step methods */
   static async calculate(x: number, y: number): Promise<number> {
-    'use workflow';
+    "use workflow";
     // Add x + y, then multiply by 2
     const sum = await MathService.add(x, y);
     const result = await MathService.multiply(sum, 2);
@@ -1014,18 +1014,18 @@ export class Calculator {
  */
 export class AllInOneService {
   static async double(n: number): Promise<number> {
-    'use step';
+    "use step";
     return n * 2;
   }
 
   static async triple(n: number): Promise<number> {
-    'use step';
+    "use step";
     return n * 3;
   }
 
   /** Static workflow: double(n) + triple(n) = 2n + 3n = 5n */
   static async processNumber(n: number): Promise<number> {
-    'use workflow';
+    "use workflow";
     const doubled = await AllInOneService.double(n);
     const tripled = await AllInOneService.triple(n);
     return doubled + tripled;
@@ -1045,7 +1045,7 @@ export class ChainableService {
     this: typeof ChainableService,
     n: number
   ): Promise<number> {
-    'use step';
+    "use step";
     // Use `this` to reference the class and access its static property
     // `this` is the class constructor, so `this.multiplier` accesses the static property
     // biome-ignore lint/complexity/noThisInStatic: Testing `this` serialization for static methods
@@ -1057,7 +1057,7 @@ export class ChainableService {
     this: typeof ChainableService,
     n: number
   ): Promise<number> {
-    'use step';
+    "use step";
     // Use `this` to access the static property on the class
     // Note: We can't call another step from within a step, so we just reference a static property
     // biome-ignore lint/complexity/noThisInStatic: Testing `this` serialization for static methods
@@ -1070,7 +1070,7 @@ export class ChainableService {
     doubledAndMultiplied: number;
     sum: number;
   }> {
-    'use workflow';
+    "use workflow";
     // When calling static methods via ClassName.method(), `this` inside the step
     // will be the class constructor (ChainableService). The class constructor
     // is serialized with its classId and passed to the step handler.
@@ -1102,7 +1102,7 @@ export class ChainableService {
  * A step function that uses `this` to access properties.
  */
 async function multiplyByFactor(this: { factor: number }, value: number) {
-  'use step';
+  "use step";
   return value * this.factor;
 }
 
@@ -1110,7 +1110,7 @@ async function multiplyByFactor(this: { factor: number }, value: number) {
  * Workflow that tests calling step functions with explicit `this` via .call() and .apply()
  */
 export async function thisSerializationWorkflow(baseValue: number) {
-  'use workflow';
+  "use workflow";
   // Test .call() - multiply baseValue by 2
   const result1 = await multiplyByFactor.call({ factor: 2 }, baseValue);
 
@@ -1143,12 +1143,12 @@ export class Point {
   ) {}
 
   /** Custom serialization - converts instance to plain object */
-  static [Symbol.for('workflow-serialize')](instance: Point) {
+  static [Symbol.for("workflow-serialize")](instance: Point) {
     return { x: instance.x, y: instance.y };
   }
 
   /** Custom deserialization - reconstructs instance from plain object */
-  static [Symbol.for('workflow-deserialize')](data: { x: number; y: number }) {
+  static [Symbol.for("workflow-deserialize")](data: { x: number; y: number }) {
     return new Point(data.x, data.y);
   }
 
@@ -1162,10 +1162,10 @@ export class Point {
  * Step that receives a Point instance and returns a new Point
  */
 async function transformPoint(point: Point, scale: number) {
-  'use step';
+  "use step";
   // Verify the point was properly deserialized and has its methods
   // (calling distanceFromOrigin proves the prototype chain is intact)
-  console.log('Point distance from origin:', point.distanceFromOrigin());
+  console.log("Point distance from origin:", point.distanceFromOrigin());
   // Create and return a new Point (will be serialized on return)
   return new Point(point.x * scale, point.y * scale);
 }
@@ -1174,7 +1174,7 @@ async function transformPoint(point: Point, scale: number) {
  * Step that receives an array of Points
  */
 async function sumPoints(points: Point[]) {
-  'use step';
+  "use step";
   let totalX = 0;
   let totalY = 0;
   for (const p of points) {
@@ -1191,7 +1191,7 @@ async function sumPoints(points: Point[]) {
  * workflow/step boundary.
  */
 export async function customSerializationWorkflow(x: number, y: number) {
-  'use workflow';
+  "use workflow";
 
   // Create a Point instance
   const point = new Point(x, y);
@@ -1228,7 +1228,7 @@ import {
   createVector,
   scaleVector,
   sumVectors,
-} from './serde-steps';
+} from "./serde-steps";
 
 /**
  * Workflow that tests cross-context class registration.
@@ -1249,7 +1249,7 @@ import {
  * workflow bundle wouldn't have Vector registered for deserialization.
  */
 export async function crossContextSerdeWorkflow() {
-  'use workflow';
+  "use workflow";
 
   // Step 1: Create a vector in the step
   // Tests: step creating instance -> workflow deserialization
@@ -1298,12 +1298,12 @@ export class Counter {
   constructor(public value: number) {}
 
   /** Custom serialization - converts instance to plain object */
-  static [Symbol.for('workflow-serialize')](instance: Counter) {
+  static [Symbol.for("workflow-serialize")](instance: Counter) {
     return { value: instance.value };
   }
 
   /** Custom deserialization - reconstructs instance from plain object */
-  static [Symbol.for('workflow-deserialize')](data: { value: number }) {
+  static [Symbol.for("workflow-deserialize")](data: { value: number }) {
     return new Counter(data.value);
   }
 
@@ -1313,7 +1313,7 @@ export class Counter {
    * to the step handler, then deserialized before the method is called.
    */
   async add(amount: number): Promise<number> {
-    'use step';
+    "use step";
     return this.value + amount;
   }
 
@@ -1321,7 +1321,7 @@ export class Counter {
    * Instance method step: multiplies the counter's value by the given factor.
    */
   async multiply(factor: number): Promise<number> {
-    'use step';
+    "use step";
     return this.value * factor;
   }
 
@@ -1330,7 +1330,7 @@ export class Counter {
    * This tests that `this` is correctly preserved through the step execution.
    */
   async describe(label: string): Promise<{ label: string; value: number }> {
-    'use step';
+    "use step";
     return { label, value: this.value };
   }
 }
@@ -1342,7 +1342,7 @@ export class Counter {
  * correctly restored when the step executes.
  */
 export async function instanceMethodStepWorkflow(initialValue: number) {
-  'use workflow';
+  "use workflow";
 
   // Create a Counter instance
   const counter = new Counter(initialValue);
@@ -1350,7 +1350,7 @@ export async function instanceMethodStepWorkflow(initialValue: number) {
   // Call instance method steps
   const added = await counter.add(10);
   const multiplied = await counter.multiply(3);
-  const description = await counter.describe('test counter');
+  const description = await counter.describe("test counter");
 
   // Create another counter to verify different instances work
   const counter2 = new Counter(100);
@@ -1378,7 +1378,7 @@ async function invokeStepFn(
   x: number,
   y: number
 ): Promise<number> {
-  'use step';
+  "use step";
   // Call the step function reference that was passed in
   return await stepFn(x, y);
 }
@@ -1396,7 +1396,7 @@ export async function stepFunctionAsStartArgWorkflow(
   x: number,
   y: number
 ): Promise<{ directResult: number; viaStepResult: number; doubled: number }> {
-  'use workflow';
+  "use workflow";
 
   // CRITICAL TEST: Call the passed step function DIRECTLY from workflow code
   // This tests that the deserialized step function has the useStep wrapper,
@@ -1415,7 +1415,7 @@ export async function stepFunctionAsStartArgWorkflow(
 //////////////////////////////////////////////////////////
 
 async function processPayload(payload: { type: string; id?: number }) {
-  'use step';
+  "use step";
   return { processed: true, type: payload.type, id: payload.id };
 }
 
@@ -1427,14 +1427,14 @@ async function processPayload(payload: { type: string; id?: number }) {
  * would terminate the workflow before all hook payloads were processed.
  */
 export async function hookWithSleepWorkflow(token: string) {
-  'use workflow';
+  "use workflow";
 
   type Payload = { type: string; id?: number; done?: boolean };
 
   using hook = createHook<Payload>({ token });
 
   // Concurrent sleep that won't complete during the test
-  void sleep('1d');
+  void sleep("1d");
 
   const results: any[] = [];
 
@@ -1454,7 +1454,7 @@ export async function hookWithSleepWorkflow(token: string) {
 //////////////////////////////////////////////////////////
 
 async function addNumbers(a: number, b: number) {
-  'use step';
+  "use step";
   return a + b;
 }
 
@@ -1470,12 +1470,12 @@ async function addNumbers(a: number, b: number) {
  * ...fires all iterations instantly with zero delay.
  */
 async function noopStep(iteration: number) {
-  'use step';
+  "use step";
   return { iteration, ts: Date.now() };
 }
 
 export async function sleepInLoopWorkflow() {
-  'use workflow';
+  "use workflow";
   const iterations = 3;
   const sleepMs = 3_000; // 3s between iterations (2 sleeps total)
   const timestamps: number[] = [];
@@ -1501,11 +1501,11 @@ export async function sleepInLoopWorkflow() {
  * the promiseQueue regression is specific to hooks.
  */
 export async function sleepWithSequentialStepsWorkflow() {
-  'use workflow';
+  "use workflow";
 
   // Fire-and-forget sleep (same pattern as agent-stop)
   let shouldCancel = false;
-  void sleep('1d').then(() => {
+  void sleep("1d").then(() => {
     shouldCancel = true;
   });
 
@@ -1526,17 +1526,17 @@ async function checkImportMetaUrl(): Promise<{
   type: string;
   isFileUrl: boolean;
 }> {
-  'use step';
+  "use step";
   const url = import.meta.url;
   return {
-    isDefined: typeof url === 'string' && url.length > 0,
+    isDefined: typeof url === "string" && url.length > 0,
     type: typeof url,
-    isFileUrl: typeof url === 'string' && url.startsWith('file://'),
+    isFileUrl: typeof url === "string" && url.startsWith("file://"),
   };
 }
 
 export async function importMetaUrlWorkflow() {
-  'use workflow';
+  "use workflow";
   return await checkImportMetaUrl();
 }
 
@@ -1563,7 +1563,7 @@ async function metadataHelperStep(label: string): Promise<{
   stepId: string;
   attempt: number;
 }> {
-  'use step';
+  "use step";
 
   const { workflowMetadata, stepMetadata } = await withStrictMetadataCheck(
     async () => label
@@ -1583,7 +1583,7 @@ export async function metadataFromHelperWorkflow(label: string): Promise<{
   stepId: string;
   attempt: number;
 }> {
-  'use workflow';
+  "use workflow";
 
   return await metadataHelperStep(label);
 }
@@ -1604,11 +1604,11 @@ export class Sensor {
     public multiplier: number
   ) {}
 
-  static [Symbol.for('workflow-serialize')](instance: Sensor) {
+  static [Symbol.for("workflow-serialize")](instance: Sensor) {
     return { baseValue: instance.baseValue, multiplier: instance.multiplier };
   }
 
-  static [Symbol.for('workflow-deserialize')](data: {
+  static [Symbol.for("workflow-deserialize")](data: {
     baseValue: number;
     multiplier: number;
   }) {
@@ -1625,7 +1625,7 @@ export class Sensor {
 
   /** Regular instance method step for comparison */
   async calibrate(offset: number): Promise<number> {
-    'use step';
+    "use step";
     return this.baseValue * this.multiplier + offset;
   }
 }
@@ -1639,7 +1639,7 @@ export async function getterStepWorkflow(
   multiplier: number,
   offset: number
 ) {
-  'use workflow';
+  "use workflow";
 
   const sensor = new Sensor(base, multiplier);
 
@@ -1673,13 +1673,13 @@ export async function childWorkflowWithHookSignal(
   hookToken: string,
   value: number
 ) {
-  'use workflow';
+  "use workflow";
   const result = await processAndSignalParent(hookToken, value);
   return result;
 }
 
 async function processAndSignalParent(hookToken: string, value: number) {
-  'use step';
+  "use step";
   const processed = value * 3;
   await resumeHook(hookToken, { processed });
   return { processed };
@@ -1690,7 +1690,7 @@ async function processAndSignalParent(hookToken: string, value: number) {
  * then waits for a hook signal from the child.
  */
 export async function startFromWorkflow(inputValue: number) {
-  'use workflow';
+  "use workflow";
   const hook = createHook<{ processed: number }>();
   const childRun = await start(childWorkflowWithHookSignal, [
     hook.token,
@@ -1709,7 +1709,7 @@ export async function startFromWorkflow(inputValue: number) {
  * child workflows for fib(n-1) and fib(n-2).
  */
 export async function fibonacciWorkflow(n: number): Promise<number> {
-  'use workflow';
+  "use workflow";
   if (!Number.isFinite(n)) {
     throw new FatalError(`fibonacciWorkflow requires a finite number for n`);
   }
@@ -1730,7 +1730,7 @@ export async function fibonacciWorkflow(n: number): Promise<number> {
 
 // Message type written to the stream when abort fires
 export type AbortMessage = {
-  type: 'abort';
+  type: "abort";
   reason?: string;
   expired: boolean;
 };
@@ -1742,11 +1742,11 @@ function getAbortToken(id: string): string {
 
 // Step function that writes the abort message to the stream
 async function writeAbortSignal(reason?: string, expired = false) {
-  'use step';
+  "use step";
   const writable = getWritable<AbortMessage>();
   const writer = writable.getWriter();
   try {
-    await writer.write({ type: 'abort', reason, expired });
+    await writer.write({ type: "abort", reason, expired });
   } finally {
     writer.releaseLock();
   }
@@ -1767,7 +1767,7 @@ export async function distributedAbortControllerWorkflow(
   ttlMs: number,
   graceMs: number
 ) {
-  'use workflow';
+  "use workflow";
 
   const startTime = Date.now();
   const hook = createHook<{ reason?: string }>({ token: getAbortToken(id) });
@@ -1779,7 +1779,7 @@ export async function distributedAbortControllerWorkflow(
       expired: false,
     })),
     sleep(ttlMs).then(() => ({
-      reason: 'Controller expired',
+      reason: "Controller expired",
       expired: true,
     })),
   ]);
@@ -1871,7 +1871,7 @@ export class DistributedAbortController {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            if (value && value.type === 'abort') {
+            if (value && value.type === "abort") {
               controller.abort(value.reason);
               break;
             }

@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json(
       { error: "Invalid token or validation failed" },
-      { status: 400 },
+      { status: 400 }
     );
   }
 }

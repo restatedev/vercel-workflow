@@ -11,7 +11,7 @@ async function processInputStream(input: ReadableStream<Uint8Array>) {
 }
 
 export async function streamProcessingWorkflow(
-  inputStream: ReadableStream<Uint8Array>,
+  inputStream: ReadableStream<Uint8Array>
 ) {
   "use workflow";
 

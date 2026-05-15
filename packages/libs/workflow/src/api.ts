@@ -48,9 +48,7 @@ function getIngressUrl(): string {
  * events API.
  */
 export class Run<TResult> extends CoreRun<TResult> {
-  override async wakeUp(
-    options?: StopSleepOptions
-  ): Promise<StopSleepResult> {
+  override async wakeUp(options?: StopSleepOptions): Promise<StopSleepResult> {
     const restate = clients.connect({ url: getIngressUrl() });
     const pending = await restate
       .objectClient(sleepObj, this.runId)
@@ -79,9 +77,7 @@ export class Run<TResult> extends CoreRun<TResult> {
 
   private async fetchStatus(): Promise<WorkflowRunStatus> {
     const restate = clients.connect({ url: getIngressUrl() });
-    const data = await restate
-      .objectClient(workflowRunObj, this.runId)
-      .get();
+    const data = await restate.objectClient(workflowRunObj, this.runId).get();
     if (!data) {
       throw new Error(`Workflow run ${this.runId} not found`);
     }
@@ -94,9 +90,7 @@ export class Run<TResult> extends CoreRun<TResult> {
 
   private async checkExists(): Promise<boolean> {
     const restate = clients.connect({ url: getIngressUrl() });
-    const data = await restate
-      .objectClient(workflowRunObj, this.runId)
-      .get();
+    const data = await restate.objectClient(workflowRunObj, this.runId).get();
     return data !== null;
   }
 
@@ -107,14 +101,14 @@ export class Run<TResult> extends CoreRun<TResult> {
   private async attachReturnValue(): Promise<TResult> {
     const restate = clients.connect({ url: getIngressUrl() });
     try {
-      return await restate
+      return (await restate
         .objectClient(workflowRunObj, this.runId)
-        .awaitResult() as TResult;
+        .awaitResult()) as TResult;
     } catch (err) {
       if (err instanceof TerminalError && err.code === 409) {
         throw new WorkflowRunCancelledError(this.runId);
       }
-     if (err instanceof TerminalError) {
+      if (err instanceof TerminalError) {
         // Errors thrown from a workflow handler are user-code errors by
         // default ("Error thrown in user workflow or step code" per
         // upstream's RUN_ERROR_CODES). Set USER_ERROR so consumers checking
@@ -140,35 +134,35 @@ export function getRun<TResult>(runId: string): Run<TResult> {
 export function start<TArgs extends unknown[], TResult>(
   workflow: WorkflowFunction<TArgs, TResult> | WorkflowMetadata,
   args: unknown[],
-  options: StartOptionsWithDeploymentId,
+  options: StartOptionsWithDeploymentId
 ): Promise<Run<unknown>>;
 export function start<TResult>(
   workflow: WorkflowFunction<[], TResult> | WorkflowMetadata,
-  options: StartOptionsWithDeploymentId,
+  options: StartOptionsWithDeploymentId
 ): Promise<Run<unknown>>;
 export function start<TArgs extends unknown[], TResult>(
   workflow: WorkflowFunction<TArgs, TResult> | WorkflowMetadata,
   args: TArgs,
-  options?: StartOptionsWithoutDeploymentId,
+  options?: StartOptionsWithoutDeploymentId
 ): Promise<Run<TResult>>;
 export function start<TResult>(
   workflow: WorkflowFunction<[], TResult> | WorkflowMetadata,
-  options?: StartOptionsWithoutDeploymentId,
+  options?: StartOptionsWithoutDeploymentId
 ): Promise<Run<TResult>>;
 export async function start(
   workflow: WorkflowFunction<unknown[], unknown> | WorkflowMetadata,
   argsOrOptions?: unknown[] | StartOptions,
-  maybeOptions?: StartOptions,
+  maybeOptions?: StartOptions
 ): Promise<Run<unknown>> {
   const coreRun = Array.isArray(argsOrOptions)
     ? await coreStart(
         workflow,
         argsOrOptions,
-        maybeOptions as StartOptionsWithoutDeploymentId | undefined,
+        maybeOptions as StartOptionsWithoutDeploymentId | undefined
       )
     : await coreStart(
         workflow,
-        argsOrOptions as StartOptionsWithoutDeploymentId | undefined,
+        argsOrOptions as StartOptionsWithoutDeploymentId | undefined
       );
   Object.setPrototypeOf(coreRun, Run.prototype);
   return coreRun as Run<unknown>;

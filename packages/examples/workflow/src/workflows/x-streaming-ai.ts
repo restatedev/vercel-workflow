@@ -15,7 +15,11 @@ async function searchFlights({ query }: { query: string }) {
   });
   writer.releaseLock();
 
-  return { flights: [/* results */] };
+  return {
+    flights: [
+      /* results */
+    ],
+  };
 }
 
 export async function aiAssistantWorkflow(userMessage: string) {

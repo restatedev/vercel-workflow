@@ -11,7 +11,7 @@ import {
   service,
   TerminalError,
   serde,
-  InvocationIdParser
+  InvocationIdParser,
 } from "@restatedev/restate-sdk/fetch";
 import { createContext as vmCreateContext, runInContext } from "node:vm";
 import { parseStepName, parseWorkflowName } from "./parse-name.js";
@@ -117,7 +117,12 @@ function getIngressUrl(): string {
 
 export function workflowEntrypoint(workflowCode: string) {
   return createEndpointHandler({
-    services: [...createServices(workflowCode), hookObj, sleepObj, workflowRunObj],
+    services: [
+      ...createServices(workflowCode),
+      hookObj,
+      sleepObj,
+      workflowRunObj,
+    ],
   });
 }
 
@@ -223,10 +228,7 @@ export const workflowRunObj = object({
       return data;
     },
 
-    submit: async (
-      ctx: ObjectContext<WorkflowRunState>,
-      input: SubmitOpts
-    ) => {
+    submit: async (ctx: ObjectContext<WorkflowRunState>, input: SubmitOpts) => {
       const data = await ctx.get("data");
       if (!data) {
         // Race: create hasn't run yet. Record the request and let create
@@ -293,7 +295,8 @@ export const workflowRunObj = object({
         // Wait for create/submit to dispatch (handles create↔submit race)
         while (data.status === "pending") {
           await ctx.sleep(100);
-          data = (await ctx.objectClient(workflowRunObj, ctx.key).get()) ?? data;
+          data =
+            (await ctx.objectClient(workflowRunObj, ctx.key).get()) ?? data;
         }
 
         if (!data.invocationId) {
@@ -308,7 +311,9 @@ export const workflowRunObj = object({
     ),
 
     cancel: handlers.object.shared(
-      async (ctx: ObjectSharedContext<WorkflowRunState>): Promise<WorkflowRunData | null> => {
+      async (
+        ctx: ObjectSharedContext<WorkflowRunState>
+      ): Promise<WorkflowRunData | null> => {
         const data = await ctx.get("data");
         if (!data?.invocationId) return data;
 
@@ -362,7 +367,28 @@ function createServices(workflowCode: string) {
     service({
       name: serviceName,
       handlers: {
-        run: (ctx, {serviceName, payload, runId, workflowName}: {serviceName: string, payload: string, runId: string, workflowName: string}) => restateHandler(ctx, workflowCode, serviceName, payload, runId, workflowName),
+        run: (
+          ctx,
+          {
+            serviceName,
+            payload,
+            runId,
+            workflowName,
+          }: {
+            serviceName: string;
+            payload: string;
+            runId: string;
+            workflowName: string;
+          }
+        ) =>
+          restateHandler(
+            ctx,
+            workflowCode,
+            serviceName,
+            payload,
+            runId,
+            workflowName
+          ),
       },
     })
   );
@@ -379,7 +405,7 @@ async function restateHandler(
   serviceName: string,
   payload: string,
   runId: string,
-  workflowName: string,
+  workflowName: string
 ) {
   // Wrap the entire handler so that VM errors (which have a different Error
   // prototype and JSON.stringify to "{}") are always converted to host Errors
@@ -661,7 +687,8 @@ function createSleep(ctx: WorkflowOrchestratorContext, runId: string) {
   return function sleep(param: number | Date | string): Promise<void> {
     const millis = parseSleepDuration(param);
     const correlationId = ctx.restateCtx.rand.uuidv4();
-    const { id: awakeableId, promise: wakeUpPromise } = ctx.restateCtx.awakeable();
+    const { id: awakeableId, promise: wakeUpPromise } =
+      ctx.restateCtx.awakeable();
     const timerPromise = ctx.restateCtx.sleep(millis);
 
     // Register so wakeUp() can find and resolve this awakeable
@@ -905,7 +932,10 @@ class SignalStreamWriter<T> {
   }
 }
 
-export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string) {
+export function createCreateHook(
+  ctx: WorkflowOrchestratorContext,
+  runId: string
+) {
   const ctxInternal = ctx.restateCtx as unknown as internal.ContextInternal;
   return function createHookImpl<T = unknown>(
     options: HookOptions = {}
@@ -975,12 +1005,14 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
           | ((reason: unknown) => TResult2 | PromiseLike<TResult2>)
           | null
       ): Promise<TResult1 | TResult2> {
-        return nextValue().then((res) => {
-          if (res.done) {
-            throw new Error("Hook was disposed before a value arrived");
-          }
-          return res.value;
-        }, undefined).then(onfulfilled, onrejected);
+        return nextValue()
+          .then((res) => {
+            if (res.done) {
+              throw new Error("Hook was disposed before a value arrived");
+            }
+            return res.value;
+          }, undefined)
+          .then(onfulfilled, onrejected);
       },
 
       dispose() {
@@ -1005,9 +1037,11 @@ export function createCreateHook(ctx: WorkflowOrchestratorContext, runId: string
     // Also register with the VM's Symbol.dispose if it differs from the host's.
     // vm.createContext() has its own Symbol constructor where dispose may be
     // polyfilled to a different value than the host's native Symbol.dispose.
-    const vmDispose = (ctx.globalThis.Symbol as Record<string, unknown>)?.dispose as symbol | undefined;
+    const vmDispose = (ctx.globalThis.Symbol as Record<string, unknown>)
+      ?.dispose as symbol | undefined;
     if (vmDispose && vmDispose !== Symbol.dispose) {
-      (hook as unknown as Record<symbol, unknown>)[vmDispose] = () => hook.dispose();
+      (hook as unknown as Record<symbol, unknown>)[vmDispose] = () =>
+        hook.dispose();
     }
 
     // Webhook URL — for webhook hooks, point directly at Restate's ingress so
@@ -1065,10 +1099,7 @@ type SleepState = {
 export const sleepObj = object({
   name: "workflowSleep",
   handlers: {
-    register: async (
-      ctx: ObjectContext<SleepState>,
-      input: SleepEntry
-    ) => {
+    register: async (ctx: ObjectContext<SleepState>, input: SleepEntry) => {
       const pending = (await ctx.get("pending")) ?? [];
       pending.push(input);
       ctx.set("pending", pending);
@@ -1079,7 +1110,10 @@ export const sleepObj = object({
       input: { correlationId: string }
     ) => {
       const pending = (await ctx.get("pending")) ?? [];
-      ctx.set("pending", pending.filter(e => e.correlationId !== input.correlationId));
+      ctx.set(
+        "pending",
+        pending.filter((e) => e.correlationId !== input.correlationId)
+      );
     },
 
     wakeUp: async (
@@ -1087,10 +1121,15 @@ export const sleepObj = object({
       input: { correlationId: string }
     ) => {
       const pending = (await ctx.get("pending")) ?? [];
-      const entry = pending.find(e => e.correlationId === input.correlationId);
+      const entry = pending.find(
+        (e) => e.correlationId === input.correlationId
+      );
       if (!entry) return;
       ctx.resolveAwakeable(entry.awakeableId, undefined);
-      ctx.set("pending", pending.filter(e => e.correlationId !== input.correlationId));
+      ctx.set(
+        "pending",
+        pending.filter((e) => e.correlationId !== input.correlationId)
+      );
     },
 
     getPending: handlers.object.shared(
@@ -1160,7 +1199,9 @@ export const hookObj = object({
       }
       const ctxInternal = ctx as unknown as internal.ContextInternal;
       const writer = new SignalStreamWriter<unknown>(
-        ctxInternal.invocation(InvocationIdParser.fromString(workflowInvocationId)),
+        ctxInternal.invocation(
+          InvocationIdParser.fromString(workflowInvocationId)
+        ),
         signalName
       );
       writer.append(input);
@@ -1220,7 +1261,10 @@ export type {
 } from "@workflow/core/runtime";
 
 const WorldCache = Symbol.for("@workflow/world//cache");
-const globalSymbols = globalThis as unknown as Record<symbol, World | undefined>;
+const globalSymbols = globalThis as unknown as Record<
+  symbol,
+  World | undefined
+>;
 
 export { _createWorld as createWorld };
 

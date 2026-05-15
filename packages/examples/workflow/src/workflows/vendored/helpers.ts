@@ -7,7 +7,7 @@
 // --- Workflow Error Helpers (called directly in workflow code) ---
 
 function throwError() {
-  throw new Error('Error from imported helper module');
+  throw new Error("Error from imported helper module");
 }
 
 /** Called by errorWorkflowCrossFile - creates a call chain across files */
@@ -18,13 +18,13 @@ export function callThrower() {
 // --- Step Error Helpers (step function that throws from this file) ---
 
 function throwErrorFromStep() {
-  throw new Error('Step error from imported helper module');
+  throw new Error("Step error from imported helper module");
 }
 
 /** Step that throws an error - tests cross-file step error stack traces */
 export async function stepThatThrowsFromHelper() {
-  'use step';
+  "use step";
   throwErrorFromStep();
-  return 'never reached';
+  return "never reached";
 }
 stepThatThrowsFromHelper.maxRetries = 0;

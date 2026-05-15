@@ -1,14 +1,17 @@
 import { createWebhook, type RequestWithResponse } from "workflow";
 import { registerCallback } from "./_callback.js";
 
-async function sendCustomResponse(request: RequestWithResponse, message: string) {
+async function sendCustomResponse(
+  request: RequestWithResponse,
+  message: string
+) {
   "use step";
 
   await request.respondWith(
     new Response(JSON.stringify({ message }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
-    }),
+    })
   );
 }
 

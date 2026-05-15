@@ -13,7 +13,7 @@ async function callApi(endpoint: string) {
   if (response.status >= 500) {
     // Exponential backoffs
     throw new RetryableError("Backing off...", {
-      retryAfter: (metadata.attempt ** 2) * 1000,
+      retryAfter: metadata.attempt ** 2 * 1000,
     });
   }
   if (response.status === 404) {
@@ -21,7 +21,7 @@ async function callApi(endpoint: string) {
   }
   if (response.status === 429) {
     throw new RetryableError("Rate limited. Retrying...", {
-      retryAfter: new Date(Date.now() + 60000),  // Date instance
+      retryAfter: new Date(Date.now() + 60000), // Date instance
     });
   }
   return response.json();
@@ -29,7 +29,7 @@ async function callApi(endpoint: string) {
 callApi.maxRetries = 5; // Retry up to 5 times on failure (6 total attempts)
 
 export async function callApiWorkflow(endpoint: string) {
-  'use workflow';
+  "use workflow";
 
   const result = await callApi(endpoint);
 
